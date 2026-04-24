@@ -63,10 +63,25 @@ Firmware sources:
 Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
 Delete that directory to force a fresh download.
 
+### Push / pull code (Tool 3 — implemented)
+
+Wraps the official `mpremote` tool for filesystem operations. The device must
+already be running MicroPython (use `esp32 flash` first).
+
+```sh
+esp32 push main.py                      # upload a file to :/main.py
+esp32 push app/ /app                    # upload a directory to :/app/
+esp32 pull main.py                      # download :/main.py to ./main.py
+esp32 pull --recursive /app /tmp/back   # download a directory
+esp32 ls                                # list root of device filesystem
+esp32 ls /lib                           # list a subdirectory
+```
+
+Port auto-detection prefers MicroPython-running devices (PID `0x056B` for
+the Nano ESP32); pass `--port` to override.
+
 ### Other tools (stubbed)
 
-- `esp32 push`  — push code to device. *Not implemented yet.*
-- `esp32 pull`  — pull code from device. *Not implemented yet.*
 - `esp32 wifi`  — configure wireless IP. *Not implemented yet.*
 
 ## Supported devices

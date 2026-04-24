@@ -256,6 +256,7 @@ source = { editable = "." }
 dependencies = [
     { name = "certifi" },
     { name = "esptool" },
+    { name = "mpremote" },
     { name = "pyserial" },
 ]
 
@@ -270,12 +271,26 @@ dev = [
 requires-dist = [
     { name = "certifi", specifier = ">=2024.0" },
     { name = "esptool", specifier = ">=4.7" },
+    { name = "mpremote", specifier = ">=1.24" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "types-pyserial", marker = "extra == 'dev'", specifier = ">=3.5" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "mpremote"
+version = "1.28.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "platformdirs" },
+    { name = "pyserial" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/1b/d008342d1b018fb60e1196bf72a164ea71a567f924db11934f0e3a0a10bc/mpremote-1.28.0.tar.gz", hash = "sha256:fdb5626be83dff4e53c0184f8950814cb519b524dba7f1f8b1668aa477257a31", size = 31412 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/d7/634a63290002a9df2708e05983fc769447d64f074ac2e8d8990316c70fd0/mpremote-1.28.0-py3-none-any.whl", hash = "sha256:2df2a50f3c8098cae8c732dbf2541e7e58185e7896513b45d05196901e049334", size = 36098 },
+]
 
 [[package]]
 name = "mypy"
@@ -322,6 +337,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/2e/17/9c3094b822982b9f1ea666d8580ce59000f61f87c1663556fb72031ad9ec/pathspec-1.1.0.tar.gz", hash = "sha256:f5d7c555da02fd8dde3e4a2354b6aba817a89112fa8f333f7917a2a4834dd080", size = 133918 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/c9/8eed0486f074e9f1ca7f8ce5ad663e65f12fdab344028d658fa1b03d35e0/pathspec-1.1.0-py3-none-any.whl", hash = "sha256:574b128f7456bd899045ccd142dd446af7e6cfd0072d63ad73fbc55fbb4aaa42", size = 56264 },
+]
+
+[[package]]
+name = "platformdirs"
+version = "4.9.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/4a/0883b8e3802965322523f0b200ecf33d31f10991d0401162f4b23c698b42/platformdirs-4.9.6.tar.gz", hash = "sha256:3bfa75b0ad0db84096ae777218481852c0ebc6c727b3168c1b9e0118e458cf0a", size = 29400 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/a6/a0a304dc33b49145b21f4808d763822111e67d1c3a32b524a1baf947b6e1/platformdirs-4.9.6-py3-none-any.whl", hash = "sha256:e61adb1d5e5cb3441b4b7710bea7e4c12250ca49439228cc1021c00dcfac0917", size = 21348 },
 ]
 
 [[package]]

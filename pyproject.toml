@@ -13,6 +13,7 @@ dependencies = [
     "pyserial>=3.5",
     "esptool>=4.7",
     "certifi>=2024.0",
+    "mpremote>=1.24",
 ]
 
 [project.optional-dependencies]

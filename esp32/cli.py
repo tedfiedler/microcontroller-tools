@@ -3,9 +3,10 @@
 Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 
 * ``discover`` — Tool 1 (implemented): enumerate ESP32-family USB devices.
-* ``flash``    — Tool 2 (implemented): write MicroPython firmware via esptool.
-* ``push``     — Tool 3a (stub): upload code to the device.
-* ``pull``     — Tool 3b (stub): download code from the device.
+* ``flash``    — Tool 2 (implemented): write MicroPython firmware.
+* ``push``     — Tool 3a (implemented): upload code to the device via mpremote.
+* ``pull``     — Tool 3b (implemented): download code from the device via mpremote.
+* ``ls``       — Tool 3c (implemented): list files on the device.
 * ``wifi``     — Tool 4 (stub): configure a Wi-Fi IP.
 """
 
@@ -109,8 +110,76 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip the confirmation prompt.",
     )
 
-    subparsers.add_parser("push", help="(stub) Push code to a device.")
-    subparsers.add_parser("pull", help="(stub) Pull code from a device.")
+    p_push = subparsers.add_parser(
+        "push",
+        help="Copy a local file or directory onto the device.",
+        description=(
+            "Copy a local file or directory onto the device's filesystem via "
+            "mpremote. Directories are copied recursively."
+        ),
+    )
+    p_push.add_argument("local", help="Local path to copy (file or directory).")
+    p_push.add_argument(
+        "remote",
+        nargs="?",
+        default=None,
+        help=(
+            "Destination path on the device (e.g. main.py, /lib/foo). "
+            "Default: the local basename at device root."
+        ),
+    )
+    p_push.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+
+    p_pull = subparsers.add_parser(
+        "pull",
+        help="Copy a file or directory off the device.",
+        description=(
+            "Copy a file or directory off the device's filesystem via mpremote."
+        ),
+    )
+    p_pull.add_argument("remote", help="Source path on the device (e.g. main.py).")
+    p_pull.add_argument(
+        "local",
+        nargs="?",
+        default=None,
+        help="Destination path on the host. Default: the remote basename in CWD.",
+    )
+    p_pull.add_argument(
+        "--recursive",
+        "-r",
+        dest="recursive",
+        action="store_true",
+        help="Copy recursively (required when pulling a directory).",
+    )
+    p_pull.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+
+    p_ls = subparsers.add_parser(
+        "ls",
+        help="List files on the device.",
+    )
+    p_ls.add_argument(
+        "remote",
+        nargs="?",
+        default=None,
+        help="Directory on the device to list (default: root).",
+    )
+    p_ls.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+
     subparsers.add_parser("wifi", help="(stub) Configure a Wi-Fi IP on the device.")
 
     return parser
@@ -143,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
             return code.run_push(args)
         case "pull":
             return code.run_pull(args)
+        case "ls":
+            return code.run_ls(args)
         case "wifi":
             return wifi.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
