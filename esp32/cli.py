@@ -7,7 +7,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``push``     — Tool 3a (implemented): upload code to the device via mpremote.
 * ``pull``     — Tool 3b (implemented): download code from the device via mpremote.
 * ``ls``       — Tool 3c (implemented): list files on the device.
-* ``wifi``     — Tool 4 (stub): configure a Wi-Fi IP.
+* ``wifi``     — Tool 4 (implemented): configure Wi-Fi (DHCP or static IP).
 """
 
 from __future__ import annotations
@@ -180,7 +180,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Serial port (default: auto-detect a MicroPython-running ESP32).",
     )
 
-    subparsers.add_parser("wifi", help="(stub) Configure a Wi-Fi IP on the device.")
+    p_wifi = subparsers.add_parser(
+        "wifi",
+        help="Connect to a Wi-Fi network and optionally set a static IP.",
+        description=(
+            "Drive the ESP32's Wi-Fi STA interface via mpremote exec: "
+            "connect to an SSID, optionally pin a static IP, optionally "
+            "persist the config on the device."
+        ),
+    )
+    wifi.add_arguments(p_wifi)
 
     return parser
 

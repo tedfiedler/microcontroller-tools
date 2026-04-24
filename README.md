@@ -80,9 +80,34 @@ esp32 ls /lib                           # list a subdirectory
 Port auto-detection prefers MicroPython-running devices (PID `0x056B` for
 the Nano ESP32); pass `--port` to override.
 
-### Other tools (stubbed)
+### Wi-Fi config (Tool 4 — implemented)
 
-- `esp32 wifi`  — configure wireless IP. *Not implemented yet.*
+Connect the board's Wi-Fi STA interface to an AP and (optionally) pin a
+static IP. Driven via `mpremote exec` with a small generated MicroPython
+script. Requires the board to be running MicroPython.
+
+```sh
+esp32 wifi MyNetwork                     # DHCP, prompts for password (no echo)
+esp32 wifi MyNetwork --password hunter2  # DHCP, explicit password
+esp32 wifi OpenAP --open                 # open network (no password)
+
+# Static IP (netmask defaults to /24, gateway defaults to .1 of --ip, dns to 1.1.1.1):
+esp32 wifi MyNetwork --ip 192.168.1.100
+
+# Full static config:
+esp32 wifi MyNetwork --ip 192.168.1.100 --netmask 255.255.0.0 \
+    --gateway 192.168.1.254 --dns 9.9.9.9
+
+# Also write a _wifi_cfg.py on the device for auto-reconnect on boot.
+# (Password is stored in plaintext — standard IoT pattern but worth knowing.)
+esp32 wifi MyNetwork --ip 192.168.1.100 --persist
+
+# Just show current interface state, no config change:
+esp32 wifi --status
+```
+
+On success the tool prints the associated IP. With `--persist`, add
+`import _wifi_cfg` to your `boot.py` to have the device auto-reconnect.
 
 ## Supported devices
 
