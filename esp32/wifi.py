@@ -75,10 +75,23 @@ class WifiConfig:
 
 
 def _build_connect_script(cfg: WifiConfig) -> str:
-    """Generate the MicroPython script that connects and prints ifconfig."""
+    """Generate the MicroPython script that connects and prints ifconfig.
+
+    Starts with a deliberate ``active(False) → active(True)`` reset so a
+    previously-running wlan state (half-connected, a stale connect from a
+    prior REPL session, etc.) doesn't cause ``OSError: Wifi Internal State
+    Error`` when we call ``connect()`` again.
+    """
     lines: list[str] = [
         "import network, time",
         "wlan = network.WLAN(network.STA_IF)",
+        # Reset to a clean slate. ESP32 MicroPython is picky if there's a
+        # pending / stale connection state when you call connect() a second
+        # time in the same boot.
+        "try: wlan.disconnect()",
+        "except OSError: pass",
+        "wlan.active(False)",
+        "time.sleep_ms(100)",
         "wlan.active(True)",
     ]
     if cfg.static_ip is not None:
