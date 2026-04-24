@@ -1,9 +1,15 @@
 """Board profiles: how to flash MicroPython onto each supported ESP32 variant.
 
-All supported boards are flashed via ``esptool`` talking to the ESP32 ROM
-serial-download bootloader. For the Arduino Nano ESP32 that means the user
-must enter ROM bootloader mode manually (hold BOOT while pressing RESET)
-before flashing — doing so replaces the factory Arduino DFU bootloader.
+Two flash methods are supported:
+
+* ``esptool`` — shells out to ``esptool`` and talks to the ESP32 ROM
+  serial-download bootloader. Used for generic ESP32 / S2 / S3 / C3 boards
+  where holding BOOT while pressing RESET (or the board's auto-reset circuit)
+  drops the chip into ROM download mode.
+* ``dfu`` — shells out to ``dfu-util``. Used for boards that ship with a
+  factory USB DFU-class bootloader, notably the Arduino Nano ESP32. Double-
+  tapping RESET enters the DFU bootloader; this method preserves the factory
+  Arduino bootloader rather than overwriting it.
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ from typing import Literal
 
 from esp32.usb_ids import ESP32_SIGNATURES, UsbSignature
 
-FlashMethod = Literal["esptool"]
+FlashMethod = Literal["esptool", "dfu"]
 
 
 @dataclass(frozen=True)
@@ -23,13 +29,19 @@ class BoardProfile:
     Attributes:
         slug: micropython.org board slug (directory name under ``/download/``).
         display_name: Human-friendly label shown in logs/prompts.
-        flash_method: How the firmware is delivered to the device.
+        flash_method: Which flash backend drives the write.
         firmware_extension: File extension of the firmware artifact on
-            micropython.org (``".bin"`` for esptool, ``".uf2"`` for UF2).
-        chip: esptool ``--chip`` argument (only meaningful for
-            ``flash_method == "esptool"``; empty string for UF2 boards).
-        flash_offset: Byte offset where firmware is written (only meaningful
-            for ``flash_method == "esptool"``; ``0`` for UF2).
+            micropython.org (``".bin"`` for esptool, ``".uf2"`` for DFU on
+            Arduino mbed bootloaders).
+        chip: esptool ``--chip`` argument (only meaningful when
+            ``flash_method == "esptool"``).
+        flash_offset: Byte offset where firmware is written by esptool
+            (only meaningful when ``flash_method == "esptool"``).
+        dfu_vid_pid: ``(vid, pid)`` that ``dfu-util`` should target, or
+            ``None`` for non-DFU boards. For Arduino mbed boards the DFU
+            bootloader reuses the application VID/PID.
+        dfu_alt: DFU alternate interface index (only meaningful when
+            ``flash_method == "dfu"``); almost always ``0``.
     """
 
     slug: str
@@ -38,19 +50,21 @@ class BoardProfile:
     firmware_extension: str
     chip: str
     flash_offset: int
+    dfu_vid_pid: tuple[int, int] | None
+    dfu_alt: int
 
 
 ARDUINO_NANO_ESP32 = BoardProfile(
     slug="ARDUINO_NANO_ESP32",
     display_name="Arduino Nano ESP32",
-    # Flashed via the ESP32-S3 ROM bootloader. Enter ROM mode by holding the
-    # B1 (BOOT) button while pressing RESET — the board then appears as
-    # VID 0x303A / PID 0x1001 (USB JTAG/serial debug unit). This replaces
-    # the factory Arduino DFU bootloader.
-    flash_method="esptool",
-    firmware_extension=".bin",
-    chip="esp32s3",
-    flash_offset=0x0,
+    flash_method="dfu",
+    firmware_extension=".uf2",
+    chip="",
+    flash_offset=0,
+    # Arduino mbed DFU bootloader keeps the same USB VID/PID as the running
+    # application; you can tell the modes apart only by USB class descriptor.
+    dfu_vid_pid=(0x2341, 0x0070),
+    dfu_alt=0,
 )
 
 ESP32_GENERIC = BoardProfile(
@@ -60,6 +74,8 @@ ESP32_GENERIC = BoardProfile(
     firmware_extension=".bin",
     chip="esp32",
     flash_offset=0x1000,
+    dfu_vid_pid=None,
+    dfu_alt=0,
 )
 
 ESP32_GENERIC_S2 = BoardProfile(
@@ -69,6 +85,8 @@ ESP32_GENERIC_S2 = BoardProfile(
     firmware_extension=".bin",
     chip="esp32s2",
     flash_offset=0x0,
+    dfu_vid_pid=None,
+    dfu_alt=0,
 )
 
 ESP32_GENERIC_S3 = BoardProfile(
@@ -78,6 +96,8 @@ ESP32_GENERIC_S3 = BoardProfile(
     firmware_extension=".bin",
     chip="esp32s3",
     flash_offset=0x0,
+    dfu_vid_pid=None,
+    dfu_alt=0,
 )
 
 ESP32_GENERIC_C3 = BoardProfile(
@@ -87,6 +107,8 @@ ESP32_GENERIC_C3 = BoardProfile(
     firmware_extension=".bin",
     chip="esp32c3",
     flash_offset=0x0,
+    dfu_vid_pid=None,
+    dfu_alt=0,
 )
 
 
