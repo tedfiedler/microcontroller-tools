@@ -58,7 +58,10 @@ ARDUINO_NANO_ESP32 = BoardProfile(
     slug="ARDUINO_NANO_ESP32",
     display_name="Arduino Nano ESP32",
     flash_method="dfu",
-    firmware_extension=".uf2",
+    # Arduino's DFU bootloader wants the raw .bin, not .uf2 — the .uf2 is
+    # UF2-wrapped and the bootloader fails with errWRITE on block 0 when
+    # fed UF2 framing.
+    firmware_extension=".bin",
     chip="",
     flash_offset=0,
     # Arduino mbed DFU bootloader keeps the same USB VID/PID as the running
