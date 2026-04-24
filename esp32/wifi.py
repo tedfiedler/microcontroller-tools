@@ -102,12 +102,24 @@ def _build_connect_script(cfg: WifiConfig) -> str:
         )
     lines.extend(
         [
+            # ESP32 MicroPython wlan.status() codes. Translate the most
+            # useful ones so the on-device error is actionable rather than
+            # just an integer.
+            "_S = {201:'wrong password', 202:'AP not found', "
+            "203:'connect failed', 204:'no ap found', 1000:'idle', "
+            "1001:'connecting', 1010:'got ip'}",
             f"wlan.connect({cfg.ssid!r}, {cfg.password!r})",
             f"deadline = time.ticks_add(time.ticks_ms(), {int(cfg.timeout_secs * 1000)})",
             "while not wlan.isconnected():",
+            "    s = wlan.status()",
+            # A non-transient failure (wrong password, no AP) won't recover
+            # by waiting — bail out immediately with the decoded reason.
+            "    if s in (201, 202, 203, 204):",
+            "        raise RuntimeError('Wi-Fi connect failed: status=' "
+            "+ str(s) + ' (' + _S.get(s, '?') + ')')",
             "    if time.ticks_diff(deadline, time.ticks_ms()) <= 0:",
             "        raise RuntimeError('Timed out waiting for Wi-Fi; "
-            "status=' + str(wlan.status()))",
+            "status=' + str(s) + ' (' + _S.get(s, '?') + ')')",
             "    time.sleep_ms(200)",
             "print('connected; ifconfig =', wlan.ifconfig())",
         ]
