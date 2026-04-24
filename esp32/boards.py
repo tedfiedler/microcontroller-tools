@@ -21,6 +21,14 @@ from esp32.usb_ids import ESP32_SIGNATURES, UsbSignature
 
 FlashMethod = Literal["esptool", "dfu"]
 
+# Where pre-built firmware is published for this board.
+# * "micropython.org" — scrape /download/<SLUG>/ for a matching file.
+# * "arduino.cc"      — use Arduino's downloads.arduino.cc/micropython/index.json
+#                        manifest. Needed for boards whose canonical binary is
+#                        an Arduino-built variant (e.g. the .app-bin for the
+#                        Nano ESP32's Arduino DFU bootloader).
+FirmwareSource = Literal["micropython.org", "arduino.cc"]
+
 
 @dataclass(frozen=True)
 class BoardProfile:
@@ -47,6 +55,7 @@ class BoardProfile:
     slug: str
     display_name: str
     flash_method: FlashMethod
+    firmware_source: FirmwareSource
     firmware_extension: str
     chip: str
     flash_offset: int
@@ -58,10 +67,11 @@ ARDUINO_NANO_ESP32 = BoardProfile(
     slug="ARDUINO_NANO_ESP32",
     display_name="Arduino Nano ESP32",
     flash_method="dfu",
-    # Arduino's DFU bootloader wants the raw .bin, not .uf2 — the .uf2 is
-    # UF2-wrapped and the bootloader fails with errWRITE on block 0 when
-    # fed UF2 framing.
-    firmware_extension=".bin",
+    # Must use Arduino's .app-bin (app-region-only). The .bin/.uf2 on
+    # micropython.org are full flash images starting at 0x0 and conflict
+    # with the Arduino DFU bootloader's partition layout.
+    firmware_source="arduino.cc",
+    firmware_extension=".app-bin",
     chip="",
     flash_offset=0,
     # Arduino mbed DFU bootloader keeps the same USB VID/PID as the running
@@ -74,6 +84,7 @@ ESP32_GENERIC = BoardProfile(
     slug="ESP32_GENERIC",
     display_name="Generic ESP32",
     flash_method="esptool",
+    firmware_source="micropython.org",
     firmware_extension=".bin",
     chip="esp32",
     flash_offset=0x1000,
@@ -85,6 +96,7 @@ ESP32_GENERIC_S2 = BoardProfile(
     slug="ESP32_GENERIC_S2",
     display_name="Generic ESP32-S2",
     flash_method="esptool",
+    firmware_source="micropython.org",
     firmware_extension=".bin",
     chip="esp32s2",
     flash_offset=0x0,
@@ -96,6 +108,7 @@ ESP32_GENERIC_S3 = BoardProfile(
     slug="ESP32_GENERIC_S3",
     display_name="Generic ESP32-S3",
     flash_method="esptool",
+    firmware_source="micropython.org",
     firmware_extension=".bin",
     chip="esp32s3",
     flash_offset=0x0,
@@ -107,6 +120,7 @@ ESP32_GENERIC_C3 = BoardProfile(
     slug="ESP32_GENERIC_C3",
     display_name="Generic ESP32-C3",
     flash_method="esptool",
+    firmware_source="micropython.org",
     firmware_extension=".bin",
     chip="esp32c3",
     flash_offset=0x0,
@@ -125,9 +139,13 @@ BOARD_PROFILES: tuple[BoardProfile, ...] = (
 
 
 # Board profiles that can be inferred from a USB fingerprint alone.
-# Keyed by ``UsbSignature`` (frozen dataclass, hashable).
+# Keyed by ``UsbSignature`` (frozen dataclass, hashable). Both the stock
+# Arduino PID (app mode) and the MicroPython PID map to the same profile,
+# so ``esp32 flash`` works whether the current firmware is Arduino or uPy.
 SIGNATURE_TO_BOARD: dict[UsbSignature, BoardProfile] = {
-    next(s for s in ESP32_SIGNATURES if s.label == "Arduino Nano ESP32"): ARDUINO_NANO_ESP32,
+    s: ARDUINO_NANO_ESP32
+    for s in ESP32_SIGNATURES
+    if s.label.startswith("Arduino Nano ESP32")
 }
 
 

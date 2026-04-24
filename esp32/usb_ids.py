@@ -41,6 +41,12 @@ ESP32_SIGNATURES: tuple[UsbSignature, ...] = (
         notes="Official Arduino Nano ESP32 board (ESP32-S3 under the hood).",
     ),
     UsbSignature(
+        vid=0x2341,
+        pid=0x056B,
+        label="Arduino Nano ESP32 (MicroPython)",
+        notes="Nano ESP32 running MicroPython — Arduino's assigned upython PID.",
+    ),
+    UsbSignature(
         vid=0x10C4,
         pid=0xEA60,
         label="Silicon Labs CP2102/CP2104",
