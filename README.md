@@ -40,9 +40,15 @@ esp32 flash --board ESP32_GENERIC_S3             # override board slug (skip aut
 esp32 flash --port /dev/cu.usbmodem1234 --yes    # non-interactive
 ```
 
-**Arduino Nano ESP32 users:** the board must be in DFU/bootloader mode before
-flashing. Double-tap the RESET button; the USB port will reappear with a new
-name. Run `esp32 discover` to see the new port, then `esp32 flash`.
+**Arduino Nano ESP32 users:** this board uses the UF2 flash method, not
+esptool. Start `esp32 flash` — it will download the `.uf2` firmware and wait
+for the bootloader volume. Then **double-tap the RESET button**; the board
+will mount as a USB volume under `/Volumes/`, the tool will copy the `.uf2`
+onto it, and the board will auto-reboot into the new firmware.
+
+**Generic ESP32 boards:** flashed via `esptool`. If auto-reset doesn't work,
+hold the BOOT button while pressing RESET to force the ROM download mode,
+then run `esp32 flash`.
 
 Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
 Delete that directory to force a fresh download.

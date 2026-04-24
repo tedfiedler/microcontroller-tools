@@ -32,12 +32,13 @@ _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 _MPY_DOWNLOAD_URL = "https://micropython.org/download/{slug}/"
 _MPY_BASE_URL = "https://micropython.org"
 
-# Matches a stable release .bin link in the download-page HTML. The filename
-# has the shape ``<SLUG>-<YYYYMMDD>-v<VERSION>.bin``. We anchor on the slug at
-# the start and ``.bin`` at the end to exclude preview/nightly builds, which
-# contain ``-preview.`` or ``-unstable-`` segments before ``.bin``.
+# Matches a stable release firmware link in the download-page HTML. The
+# filename has the shape ``<SLUG>-<YYYYMMDD>-v<VERSION>.<EXT>``, where EXT is
+# ``.bin`` for esptool boards and ``.uf2`` for UF2 boards. We anchor on the
+# slug at the start and the exact extension at the end to exclude preview /
+# nightly builds (which include ``-preview.`` or ``-unstable-`` segments).
 _RELEASE_RE_TEMPLATE = (
-    r'href="(/resources/firmware/{slug}-\d{{8}}-v[\d.]+\.bin)"'
+    r'href="(/resources/firmware/{slug}-\d{{8}}-v[\d.]+{ext})"'
 )
 
 
@@ -84,11 +85,14 @@ def _find_latest_release_url(board: BoardProfile) -> str:
             f"Failed to fetch {page_url}: {exc}"
         ) from exc
 
-    pattern = _RELEASE_RE_TEMPLATE.format(slug=re.escape(board.slug))
+    pattern = _RELEASE_RE_TEMPLATE.format(
+        slug=re.escape(board.slug),
+        ext=re.escape(board.firmware_extension),
+    )
     match = re.search(pattern, html)
     if match is None:
         raise FirmwareResolutionError(
-            f"No stable release .bin found on {page_url}. "
+            f"No stable release {board.firmware_extension} found on {page_url}. "
             "Pass --firmware <path> with a local binary, or check the board slug."
         )
     return _MPY_BASE_URL + match.group(1)
@@ -100,9 +104,9 @@ def _download_to_cache(url: str) -> Path:
     If the cached file already exists, skips the download.
     """
     filename = url.rsplit("/", 1)[-1]
-    if not filename.endswith(".bin"):
+    if not (filename.endswith(".bin") or filename.endswith(".uf2")):
         raise FirmwareResolutionError(
-            f"Refusing to download {url}: URL does not end in .bin"
+            f"Refusing to download {url}: URL does not end in .bin or .uf2"
         )
 
     target = cache_dir() / filename
