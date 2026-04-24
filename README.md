@@ -40,15 +40,20 @@ esp32 flash --board ESP32_GENERIC_S3             # override board slug (skip aut
 esp32 flash --port /dev/cu.usbmodem1234 --yes    # non-interactive
 ```
 
-**Arduino Nano ESP32 users:** this board uses the UF2 flash method, not
-esptool. Start `esp32 flash` — it will download the `.uf2` firmware and wait
-for the bootloader volume. Then **double-tap the RESET button**; the board
-will mount as a USB volume under `/Volumes/`, the tool will copy the `.uf2`
-onto it, and the board will auto-reboot into the new firmware.
+All boards are flashed via `esptool` talking to the ESP32 ROM serial-download
+bootloader. Most dev-board designs (e.g. Espressif DevKits) handle the reset
+automatically — just run `esp32 flash`.
 
-**Generic ESP32 boards:** flashed via `esptool`. If auto-reset doesn't work,
-hold the BOOT button while pressing RESET to force the ROM download mode,
-then run `esp32 flash`.
+**Arduino Nano ESP32:** you have to enter the ESP32-S3 ROM bootloader manually:
+
+1. **Hold the B1 (BOOT) button** while pressing RESET (or while plugging USB in).
+2. Run `esp32 discover` — the board will appear as `USB JTAG/serial debug unit`
+   at VID `0x303A` / PID `0x1001`.
+3. Run `esp32 flash --board ARDUINO_NANO_ESP32`.
+
+Note: flashing the Nano ESP32 this way **overwrites the factory Arduino DFU
+bootloader**. To return to Arduino sketches later, follow Arduino's
+[bootloader restore instructions](https://support.arduino.cc/hc/en-us/articles/9810414060188-Reset-the-Arduino-bootloader-on-the-Nano-ESP32).
 
 Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
 Delete that directory to force a fresh download.

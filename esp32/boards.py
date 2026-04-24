@@ -1,13 +1,9 @@
 """Board profiles: how to flash MicroPython onto each supported ESP32 variant.
 
-Different ESP32-family boards use different flashing mechanisms. Most boards
-expose the ESP32 ROM serial-download protocol and are flashed with
-``esptool``. A few (notably the Arduino Nano ESP32) ship a factory UF2/DFU
-bootloader instead — on double-tap-reset they mount as a USB mass storage
-volume, and flashing means copying a ``.uf2`` file onto that volume.
-
-Each :class:`BoardProfile` captures which method applies and all the
-method-specific parameters needed to actually flash the board.
+All supported boards are flashed via ``esptool`` talking to the ESP32 ROM
+serial-download bootloader. For the Arduino Nano ESP32 that means the user
+must enter ROM bootloader mode manually (hold BOOT while pressing RESET)
+before flashing — doing so replaces the factory Arduino DFU bootloader.
 """
 
 from __future__ import annotations
@@ -17,7 +13,7 @@ from typing import Literal
 
 from esp32.usb_ids import ESP32_SIGNATURES, UsbSignature
 
-FlashMethod = Literal["esptool", "uf2"]
+FlashMethod = Literal["esptool"]
 
 
 @dataclass(frozen=True)
@@ -47,13 +43,14 @@ class BoardProfile:
 ARDUINO_NANO_ESP32 = BoardProfile(
     slug="ARDUINO_NANO_ESP32",
     display_name="Arduino Nano ESP32",
-    # Official Arduino DFU/UF2 bootloader. Double-tap reset -> mass storage
-    # volume -> copy .uf2 file onto it. Do NOT use esptool on this board
-    # unless you've manually re-flashed the ROM bootloader.
-    flash_method="uf2",
-    firmware_extension=".uf2",
-    chip="",
-    flash_offset=0,
+    # Flashed via the ESP32-S3 ROM bootloader. Enter ROM mode by holding the
+    # B1 (BOOT) button while pressing RESET — the board then appears as
+    # VID 0x303A / PID 0x1001 (USB JTAG/serial debug unit). This replaces
+    # the factory Arduino DFU bootloader.
+    flash_method="esptool",
+    firmware_extension=".bin",
+    chip="esp32s3",
+    flash_offset=0x0,
 )
 
 ESP32_GENERIC = BoardProfile(
