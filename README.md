@@ -32,28 +32,33 @@ esp32 discover --port /dev/cu.usbmodem1101   # inspect a single port
 ### Flash MicroPython firmware (Tool 2 — implemented)
 
 ```sh
-esp32 flash                                      # auto-detect board, download latest stable firmware, prompt, flash
-esp32 flash --erase                              # erase whole flash first (clean install)
-esp32 flash --firmware path/to/firmware.bin      # use a local .bin, skip download
+esp32 flash                                      # auto-detect board, download latest, prompt, flash
+esp32 flash --firmware path/to/firmware          # use a local file, skip download
 esp32 flash --firmware-url https://...           # download a specific URL
 esp32 flash --board ESP32_GENERIC_S3             # override board slug (skip auto-infer)
-esp32 flash --port /dev/cu.usbmodem1234 --yes    # non-interactive
+esp32 flash --yes                                # non-interactive
+esp32 flash --erase                              # (esptool boards only) erase flash first
 ```
 
-All boards are flashed via `esptool` talking to the ESP32 ROM serial-download
-bootloader. Most dev-board designs (e.g. Espressif DevKits) handle the reset
-automatically — just run `esp32 flash`.
+The tool picks the right backend per board:
 
-**Arduino Nano ESP32:** you have to enter the ESP32-S3 ROM bootloader manually:
+- **Generic ESP32 / S2 / S3 / C3** — `esptool` writes `.bin` at the chip's
+  standard offset via the ROM serial-download bootloader. Install esptool
+  comes in automatically via `uv sync`.
+- **Arduino Nano ESP32** — `dfu-util` writes Arduino's `.app-bin` at the
+  app region via the factory DFU bootloader. This preserves the Arduino
+  bootloader, so you can still run Arduino sketches later.
+  - **Prereq:** `brew install dfu-util` (one time).
+  - **Procedure:** start `esp32 flash` from app mode; double-tap the blue
+    RESET button when prompted to enter DFU mode; tool does the rest.
 
-1. **Hold the B1 (BOOT) button** while pressing RESET (or while plugging USB in).
-2. Run `esp32 discover` — the board will appear as `USB JTAG/serial debug unit`
-   at VID `0x303A` / PID `0x1001`.
-3. Run `esp32 flash --board ARDUINO_NANO_ESP32`.
-
-Note: flashing the Nano ESP32 this way **overwrites the factory Arduino DFU
-bootloader**. To return to Arduino sketches later, follow Arduino's
-[bootloader restore instructions](https://support.arduino.cc/hc/en-us/articles/9810414060188-Reset-the-Arduino-bootloader-on-the-Nano-ESP32).
+Firmware sources:
+- Most boards pull from `micropython.org/download/<SLUG>/`.
+- Arduino Nano ESP32 pulls the Arduino-built `.app-bin` from
+  `downloads.arduino.cc/micropython/index.json` — micropython.org's `.bin`
+  and `.uf2` for this board are full flash images that don't fit the
+  DFU bootloader's partition layout (see
+  `memory/project_nano_esp32_flash_recipe.md`).
 
 Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
 Delete that directory to force a fresh download.
