@@ -29,9 +29,26 @@ esp32 discover --json        # machine-readable output
 esp32 discover --port /dev/cu.usbmodem1101   # inspect a single port
 ```
 
+### Flash MicroPython firmware (Tool 2 — implemented)
+
+```sh
+esp32 flash                                      # auto-detect board, download latest stable firmware, prompt, flash
+esp32 flash --erase                              # erase whole flash first (clean install)
+esp32 flash --firmware path/to/firmware.bin      # use a local .bin, skip download
+esp32 flash --firmware-url https://...           # download a specific URL
+esp32 flash --board ESP32_GENERIC_S3             # override board slug (skip auto-infer)
+esp32 flash --port /dev/cu.usbmodem1234 --yes    # non-interactive
+```
+
+**Arduino Nano ESP32 users:** the board must be in DFU/bootloader mode before
+flashing. Double-tap the RESET button; the USB port will reappear with a new
+name. Run `esp32 discover` to see the new port, then `esp32 flash`.
+
+Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
+Delete that directory to force a fresh download.
+
 ### Other tools (stubbed)
 
-- `esp32 flash` — flash MicroPython firmware. *Not implemented yet.*
 - `esp32 push`  — push code to device. *Not implemented yet.*
 - `esp32 pull`  — pull code from device. *Not implemented yet.*
 - `esp32 wifi`  — configure wireless IP. *Not implemented yet.*

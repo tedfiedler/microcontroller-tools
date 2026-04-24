@@ -3,7 +3,7 @@
 Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 
 * ``discover`` — Tool 1 (implemented): enumerate ESP32-family USB devices.
-* ``flash``    — Tool 2 (stub): write MicroPython firmware.
+* ``flash``    — Tool 2 (implemented): write MicroPython firmware via esptool.
 * ``push``     — Tool 3a (stub): upload code to the device.
 * ``pull``     — Tool 3b (stub): download code from the device.
 * ``wifi``     — Tool 4 (stub): configure a Wi-Fi IP.
@@ -54,7 +54,61 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Inspect only the given port path (e.g. /dev/cu.usbmodem1101).",
     )
 
-    subparsers.add_parser("flash", help="(stub) Flash MicroPython firmware onto a device.")
+    p_flash = subparsers.add_parser(
+        "flash",
+        help="Flash MicroPython firmware onto an ESP32-family board.",
+        description=(
+            "Flash MicroPython firmware onto an ESP32-family board via esptool. "
+            "Arduino Nano ESP32: double-tap RESET to enter DFU mode before flashing."
+        ),
+    )
+    p_flash.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port to flash (default: auto-detect the only ESP32 on USB).",
+    )
+    p_flash.add_argument(
+        "--board",
+        dest="board",
+        default=None,
+        help="micropython.org board slug (default: auto-infer from USB fingerprint).",
+    )
+    p_flash.add_argument(
+        "--firmware",
+        dest="firmware",
+        default=None,
+        help="Local path to a MicroPython .bin. Skips the download step.",
+    )
+    p_flash.add_argument(
+        "--firmware-url",
+        dest="firmware_url",
+        default=None,
+        help=(
+            "Specific firmware URL to download "
+            "(default: scrape micropython.org for latest stable)."
+        ),
+    )
+    p_flash.add_argument(
+        "--baud",
+        dest="baud",
+        type=int,
+        default=460800,
+        help="Flashing baud rate (default: 460800).",
+    )
+    p_flash.add_argument(
+        "--erase",
+        dest="erase",
+        action="store_true",
+        help="Erase the entire flash before writing firmware.",
+    )
+    p_flash.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="Skip the confirmation prompt.",
+    )
+
     subparsers.add_parser("push", help="(stub) Push code to a device.")
     subparsers.add_parser("pull", help="(stub) Pull code from a device.")
     subparsers.add_parser("wifi", help="(stub) Configure a Wi-Fi IP on the device.")
