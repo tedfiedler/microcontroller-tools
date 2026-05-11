@@ -104,37 +104,60 @@ def mpremote_binary() -> str:
     return binary
 
 
-def run_mpremote(port: str, argv: list[str], *, quiet: bool = False) -> int:
-    """Invoke mpremote with ``connect <port>`` prefixed, streaming output.
+def run_mpremote(
+    port: str,
+    argv: list[str],
+    *,
+    echo: bool = True,
+    check: bool = True,
+) -> int:
+    """Invoke mpremote with ``connect <port>`` prefixed.
 
     Args:
         port: Serial port passed to ``mpremote connect``.
         argv: The mpremote subcommand args (e.g. ``["fs", "ls", ":"]``).
-        quiet: If True, suppress stdout/stderr and don't raise on non-zero
-            exit (used for best-effort commands like speculative mkdir).
+        echo: If True, print the command line and stream the child's
+            stdout/stderr to the terminal. If False, suppress the echo and
+            capture (and discard, on success) the child's output — used by
+            ``--quiet`` flows that want clean output but still loud errors.
+        check: If True, raise :class:`MpyError` when mpremote exits non-zero.
+            Set False for best-effort calls like speculative ``fs mkdir``.
 
     Returns:
         mpremote's exit code.
 
     Raises:
-        MpyError: If ``quiet`` is False and mpremote exits non-zero.
+        MpyError: If ``check`` is True and mpremote exits non-zero. When
+            ``echo=False`` the captured stderr is folded into the error
+            message so failures stay actionable under ``--quiet``.
     """
     binary = mpremote_binary()
     cmd = [binary, "connect", port, *argv]
-    if not quiet:
+    if echo:
         print(f"$ {' '.join(cmd)}", flush=True)
-    result = subprocess.run(cmd, check=False, capture_output=quiet)
-    if not quiet and result.returncode != 0:
-        raise MpyError(f"mpremote exited with status {result.returncode}")
+    result = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=not echo,
+        text=not echo,
+    )
+    if check and result.returncode != 0:
+        msg = f"mpremote exited with status {result.returncode}"
+        if not echo and result.stderr:
+            msg += f": {result.stderr.strip()}"
+        raise MpyError(msg)
     return result.returncode
 
 
-def run_mpremote_capture(port: str, argv: list[str]) -> str:
+def run_mpremote_capture(
+    port: str, argv: list[str], *, echo: bool = True
+) -> str:
     """Invoke mpremote and return captured stdout as text.
 
     Use this when the caller needs to parse mpremote/device output (e.g.
-    enumerating files via a walk script). Echoes the command line for
-    transparency but does not stream the child's stdout to the terminal.
+    enumerating files via a walk script). The child's stdout is captured
+    rather than streamed; ``echo`` controls only whether we print the
+    invoked command line for transparency.
 
     Raises:
         MpyError: If mpremote exits non-zero. Stderr is included in the
@@ -142,7 +165,8 @@ def run_mpremote_capture(port: str, argv: list[str]) -> str:
     """
     binary = mpremote_binary()
     cmd = [binary, "connect", port, *argv]
-    print(f"$ {' '.join(cmd)}", flush=True)
+    if echo:
+        print(f"$ {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
         stderr = result.stderr.strip()

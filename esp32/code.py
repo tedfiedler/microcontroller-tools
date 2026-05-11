@@ -36,7 +36,7 @@ def _ensure_remote_dir(port: str, remote_dir: str) -> None:
     ``"cp: -r not specified"``. Pre-creating the dest dir dodges that.
     """
     # Idempotent: silently ignore "File exists".
-    run_mpremote(port, ["fs", "mkdir", remote_dir], quiet=True)
+    run_mpremote(port, ["fs", "mkdir", remote_dir], echo=False, check=False)
 
 
 def _remote(path: str) -> str:
@@ -128,7 +128,9 @@ def run_pull(args: argparse.Namespace) -> int:
                 raise CodeError(
                     "--all and a remote positional are mutually exclusive."
                 )
-            _pull_all(port, Path(args.all_into).expanduser())
+            _pull_all(
+                port, Path(args.all_into).expanduser(), quiet=args.quiet
+            )
             return 0
 
         if args.remote is None:
@@ -142,7 +144,7 @@ def run_pull(args: argparse.Namespace) -> int:
             fs_argv.append("-r")
         fs_argv.extend(["cp", remote, str(local)])
 
-        run_mpremote(port, fs_argv)
+        run_mpremote(port, fs_argv, echo=not args.quiet)
     except (CodeError, MpyError) as exc:
         print(f"esp32 pull: {exc}", file=sys.stderr)
         return 1
@@ -173,12 +175,16 @@ walk('/')
 """
 
 
-def _walk_device(port: str) -> list[tuple[int, str]]:
+def _walk_device(port: str, *, quiet: bool = False) -> list[tuple[int, str]]:
     """Enumerate every regular file on the device.
 
     Sends a small walker script via ``mpremote run`` (host tempfile) rather
     than ``mpremote exec`` so the invocation pattern matches the rest of the
     codebase and we don't depend on long-argv quoting behavior.
+
+    Args:
+        port: Serial port for ``mpremote connect``.
+        quiet: If True, suppress the ``$ mpremote …`` echo line.
 
     Returns:
         A list of ``(size, absolute_device_path)`` tuples, in walk order.
@@ -189,7 +195,7 @@ def _walk_device(port: str) -> list[tuple[int, str]]:
         tmp.write(_DEVICE_WALK_SCRIPT)
         tmp_path = tmp.name
     try:
-        stdout = run_mpremote_capture(port, ["run", tmp_path])
+        stdout = run_mpremote_capture(port, ["run", tmp_path], echo=not quiet)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -210,19 +216,23 @@ def _walk_device(port: str) -> list[tuple[int, str]]:
     return entries
 
 
-def _pull_all(port: str, into: Path) -> None:
+def _pull_all(port: str, into: Path, *, quiet: bool = False) -> None:
     """Pull every file from the device into ``into``, mirroring the device tree.
 
     Per-file ``fs cp`` rather than mpremote's recursive ``fs -r cp`` to dodge
     the same flat-dir quirk we work around on push. Subdirectories on the
     host are created lazily.
+
+    When ``quiet`` is True, the per-file ``mpremote`` invocations are
+    suppressed; the summary lines and any failures still print. Failures
+    are wrapped with the device path so the user knows which file broke.
     """
     if into.exists() and not into.is_dir():
         raise CodeError(
             f"--all destination exists but is not a directory: {into}"
         )
 
-    entries = _walk_device(port)
+    entries = _walk_device(port, quiet=quiet)
     if not entries:
         print("Device filesystem is empty; nothing to pull.")
         return
@@ -234,7 +244,14 @@ def _pull_all(port: str, into: Path) -> None:
         # under `into` by stripping the leading slash.
         local_path = into / device_path.lstrip("/")
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        run_mpremote(port, ["fs", "cp", f":{device_path}", str(local_path)])
+        try:
+            run_mpremote(
+                port,
+                ["fs", "cp", f":{device_path}", str(local_path)],
+                echo=not quiet,
+            )
+        except MpyError as exc:
+            raise CodeError(f"failed to copy {device_path}: {exc}") from exc
     total = sum(size for size, _ in entries)
     print(f"Done. Pulled {len(entries)} files ({total:,} bytes total).")
 

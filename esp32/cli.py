@@ -174,6 +174,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_pull.add_argument(
+        "--quiet",
+        "-q",
+        dest="quiet",
+        action="store_true",
+        help=(
+            "Suppress per-file `mpremote` echoes. Summary lines and errors "
+            "still print."
+        ),
+    )
+    p_pull.add_argument(
         "--port",
         dest="port",
         default=None,
