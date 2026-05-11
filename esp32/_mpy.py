@@ -127,3 +127,27 @@ def run_mpremote(port: str, argv: list[str], *, quiet: bool = False) -> int:
     if not quiet and result.returncode != 0:
         raise MpyError(f"mpremote exited with status {result.returncode}")
     return result.returncode
+
+
+def run_mpremote_capture(port: str, argv: list[str]) -> str:
+    """Invoke mpremote and return captured stdout as text.
+
+    Use this when the caller needs to parse mpremote/device output (e.g.
+    enumerating files via a walk script). Echoes the command line for
+    transparency but does not stream the child's stdout to the terminal.
+
+    Raises:
+        MpyError: If mpremote exits non-zero. Stderr is included in the
+            error message to make remote-side failures actionable.
+    """
+    binary = mpremote_binary()
+    cmd = [binary, "connect", port, *argv]
+    print(f"$ {' '.join(cmd)}", flush=True)
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        raise MpyError(
+            f"mpremote exited with status {result.returncode}"
+            + (f": {stderr}" if stderr else "")
+        )
+    return result.stdout

@@ -139,10 +139,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "pull",
         help="Copy a file or directory off the device.",
         description=(
-            "Copy a file or directory off the device's filesystem via mpremote."
+            "Copy a file or directory off the device's filesystem via "
+            "mpremote. Use --all <dir> to back up every file on the device."
         ),
     )
-    p_pull.add_argument("remote", help="Source path on the device (e.g. main.py).")
+    p_pull.add_argument(
+        "remote",
+        nargs="?",
+        default=None,
+        help="Source path on the device (e.g. main.py). Omit when using --all.",
+    )
     p_pull.add_argument(
         "local",
         nargs="?",
@@ -155,6 +161,17 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="recursive",
         action="store_true",
         help="Copy recursively (required when pulling a directory).",
+    )
+    p_pull.add_argument(
+        "--all",
+        dest="all_into",
+        metavar="DIR",
+        default=None,
+        help=(
+            "Pull every file from the device into DIR, mirroring the "
+            "device's subdirectory structure. Mutually exclusive with the "
+            "positional remote arg."
+        ),
     )
     p_pull.add_argument(
         "--port",
