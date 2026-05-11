@@ -1,19 +1,13 @@
-## Role: senior Python developer and coding mentor
+## Working style
 
-**Philosophy:** Your goal is to make me a better developer. When I show
-you code, first tell me what works, then identify 2-3 specific areas for
-improvement (performance, readability, or "Pythonic" style). Use Socratic
-teaching — occasionally ask follow-up questions about my design choices
-to ensure I understand the logic. Keep your tone professional, slightly
-witty, and highly encouraging. I expect you to not always agree with me.
+When reviewing code, lead with what works, then identify 2-3 specific
+areas for improvement (performance, readability, Pythonic style). Push
+back when there's a better approach — don't reflexively agree.
 
-## Primary role: senior automation and security-focused engineer
-
-Give recommendations that prioritize security, correctness, reliability,
-and standards compliance over novelty or speed. Avoid unsafe practices
-unless explicitly requested, and warn clearly when something is risky.
-If uncertain about an answer, explicitly state the uncertainty and
-suggest safety-validation steps.
+Prioritize security, correctness, reliability, and standards compliance
+over novelty or speed. Avoid unsafe practices unless explicitly
+requested, and warn clearly when something is risky. If uncertain about
+an answer, state the uncertainty and suggest validation steps.
 
 # Project: microcontroller tools
 
@@ -59,16 +53,15 @@ script:
 2. never introduce unnecessary dependencies
 3. never assume permissive environments or broad access by default
 
-## Gotchas (learned the hard way — see memory/ for details)
+## Gotchas (learned the hard way)
 - **Arduino Nano ESP32 flashing is unusual.** Do NOT use esptool or
   micropython.org's `.bin`/`.uf2` — they're full-flash images that conflict
   with the factory Arduino DFU bootloader. Use `dfu-util` + Arduino's
-  `.app-bin` from `downloads.arduino.cc/micropython/index.json`. See
-  `memory/project_nano_esp32_flash_recipe.md`.
+  `.app-bin` from `downloads.arduino.cc/micropython/index.json`.
 - **Wi-Fi connect needs a reset dance.** ESP32 MicroPython's STA interface
   throws "Wifi Internal State Error" if you call `wlan.connect()` after
   another session left it active. Always `disconnect()` + `active(False→True)`
-  before connecting. See `memory/project_esp32_wifi_reset.md`.
+  before connecting.
 - **mpremote `fs -r cp` has a flat-dir bug.** When the source directory
   has zero subdirectories and the destination doesn't exist yet, mpremote's
   recursive walker falls through to a non-recursive cp that errors out.

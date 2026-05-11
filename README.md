@@ -57,8 +57,7 @@ Firmware sources:
 - Arduino Nano ESP32 pulls the Arduino-built `.app-bin` from
   `downloads.arduino.cc/micropython/index.json` — micropython.org's `.bin`
   and `.uf2` for this board are full flash images that don't fit the
-  DFU bootloader's partition layout (see
-  `memory/project_nano_esp32_flash_recipe.md`).
+  DFU bootloader's partition layout.
 
 Downloaded firmware is cached under `~/.cache/microcontroller-tools/firmware/`.
 Delete that directory to force a fresh download.

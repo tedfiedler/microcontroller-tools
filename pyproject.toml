@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "CLI tools for working with MicroPython-capable microcontrollers over USB."
 requires-python = ">=3.14"
 readme = "README.md"
-authors = [{ name = "Ted Fiedler", email = "ted.fiedler@icloud.com" }]
+authors = [{ name = "Ted Fiedler", email = "ted@yolocolo.wtf" }]
 dependencies = [
     "pyserial>=3.5",
     "esptool>=4.7",
