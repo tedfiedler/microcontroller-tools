@@ -143,20 +143,6 @@ def _build_status_script() -> str:
     )
 
 
-def _build_persist_script(cfg: WifiConfig) -> str:
-    """Generate a script that writes ``_wifi_cfg.py`` on the device."""
-    body = _build_connect_script(cfg)
-    # ``repr(body)`` produces a valid Python string literal we can embed as
-    # the argument to ``f.write(...)``; MicroPython re-parses it exactly.
-    return (
-        "with open('_wifi_cfg.py', 'w') as f:\n"
-        f"    f.write({body!r})\n"
-        "print('wrote _wifi_cfg.py')\n"
-        "print('  run `import _wifi_cfg` from boot.py/main.py "
-        "to auto-connect on startup')"
-    )
-
-
 # ---------- CLI --------------------------------------------------------------
 
 
@@ -198,6 +184,38 @@ def _exec_script(port: str, script: str) -> None:
         Path(tmp_path).unlink(missing_ok=True)
 
 
+def _persist_config(port: str, cfg: WifiConfig) -> None:
+    """Write ``_wifi_cfg.py`` onto the device by building the file as a
+    plain Python literal on the host and copying it over with
+    ``mpremote fs cp``.
+
+    The on-device file content is identical to the script we run live for
+    the immediate connect — ``import _wifi_cfg`` from ``boot.py`` /
+    ``main.py`` to reapply at startup.
+
+    Same secret-handling discipline as :func:`_exec_script`: the host
+    tempfile is 0600 and unlinked in ``finally``. The on-device file is
+    necessarily readable by anything else running on the device (MicroPython
+    has no per-file permissions) — that's the standard plaintext trade-off
+    called out in the module docstring.
+    """
+    body = _build_connect_script(cfg)
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp.write(body)
+        tmp_path = tmp.name
+    try:
+        run_mpremote(port, ["fs", "cp", tmp_path, ":_wifi_cfg.py"])
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+    print("wrote _wifi_cfg.py on device")
+    print(
+        "  run `import _wifi_cfg` from boot.py/main.py "
+        "to auto-connect on startup"
+    )
+
+
 def run(args: argparse.Namespace) -> int:
     """Entry point for the ``esp32 wifi`` subcommand."""
     try:
@@ -237,7 +255,7 @@ def run(args: argparse.Namespace) -> int:
         _exec_script(port, _build_connect_script(cfg))
 
         if args.persist:
-            _exec_script(port, _build_persist_script(cfg))
+            _persist_config(port, cfg)
     except (WifiError, MpyError) as exc:
         print(f"esp32 wifi: {exc}", file=sys.stderr)
         return 1
