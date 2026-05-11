@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 import ssl
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path

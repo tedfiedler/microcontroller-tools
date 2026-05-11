@@ -26,7 +26,9 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 from esp32._mpy import MpyError, mpremote_binary, resolve_port, run_mpremote
 
@@ -173,18 +175,27 @@ def _get_password(args: argparse.Namespace) -> str:
         raise WifiError("No password provided.") from exc
 
 
-def _exec_script(port: str, script: str, *, contains_secret: bool = False) -> None:
-    """Run ``script`` on the device via ``mpremote exec``.
+def _exec_script(port: str, script: str) -> None:
+    """Run ``script`` on the device by writing it to a tempfile and calling
+    ``mpremote run``.
 
-    Args:
-        port: Serial port.
-        script: MicroPython source to execute on the device.
-        contains_secret: If True, suppress the default command echo so a
-            password embedded in the script doesn't end up in the user's
-            scrollback. The device's ``print`` output is still shown.
+    Why not ``mpremote exec <script>``? That passes the script body as an
+    argv element, which means an embedded Wi-Fi password is briefly visible
+    to other local users via ``ps`` / ``/proc/<pid>/cmdline`` for the
+    lifetime of the subprocess. Writing the script to a 0600-mode tempfile
+    (``NamedTemporaryFile`` uses ``mkstemp`` under the hood on POSIX) and
+    invoking ``mpremote run <path>`` keeps the secret off the process table.
+    The file is unlinked in the ``finally`` block.
     """
-    # mpremote exec takes the script as a single positional arg.
-    run_mpremote(port, ["exec", script], echo=not contains_secret)
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp.write(script)
+        tmp_path = tmp.name
+    try:
+        run_mpremote(port, ["run", tmp_path])
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -223,14 +234,10 @@ def run(args: argparse.Namespace) -> int:
             timeout_secs=args.timeout,
         )
 
-        _exec_script(
-            port, _build_connect_script(cfg), contains_secret=bool(password)
-        )
+        _exec_script(port, _build_connect_script(cfg))
 
         if args.persist:
-            _exec_script(
-                port, _build_persist_script(cfg), contains_secret=bool(password)
-            )
+            _exec_script(port, _build_persist_script(cfg))
     except (WifiError, MpyError) as exc:
         print(f"esp32 wifi: {exc}", file=sys.stderr)
         return 1

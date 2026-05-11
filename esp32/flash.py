@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from esp32 import boards, discover, firmware
+from esp32._mpy import MpyError, resolve_port
 from esp32.boards import BoardProfile
 from esp32.firmware import FirmwareResolutionError, ResolvedFirmware
 
@@ -41,35 +42,6 @@ class FlashPlan:
     firmware: ResolvedFirmware
     baud: int
     erase_first: bool
-
-
-def _resolve_port(explicit_port: str | None, required: bool) -> str | None:
-    """Return the serial port to flash, or ``None`` if not required.
-
-    For DFU boards (``required=False``) we tolerate the board being already
-    in DFU mode (where it has no serial port), since ``dfu-util`` enumerates
-    DFU devices directly via libusb.
-
-    Raises:
-        FlashError: if ``required`` and we can't pick a single port.
-    """
-    if explicit_port is not None:
-        return explicit_port
-
-    devices = discover.discover(include_unknown=False)
-    if not devices:
-        if not required:
-            return None
-        raise FlashError(
-            "No ESP32 devices found on USB. Plug one in and try again."
-        )
-    if len(devices) > 1:
-        port_list = ", ".join(d.port for d in devices)
-        raise FlashError(
-            f"Multiple ESP32 devices found ({port_list}). "
-            "Disambiguate with --port <path>."
-        )
-    return devices[0].port
 
 
 def _resolve_board(explicit_slug: str | None, port: str | None) -> BoardProfile:
@@ -289,8 +261,13 @@ def run(args: argparse.Namespace) -> int:
     """Entry point for the ``esp32 flash`` subcommand."""
     try:
         # Try to find a serial port, but don't require one — DFU boards might
-        # already be in bootloader mode (no serial port).
-        port = _resolve_port(args.port, required=False)
+        # already be in bootloader mode (no serial port). prefer_micropython
+        # is False because pre-flash the board may still be running Arduino
+        # stock firmware, which uses a different USB PID than the MicroPython
+        # build.
+        port = resolve_port(
+            args.port, prefer_micropython=False, allow_empty=True
+        )
         board = _resolve_board(args.board, port)
 
         # esptool boards *do* need a serial port; enforce now that we know
@@ -313,7 +290,7 @@ def run(args: argparse.Namespace) -> int:
             baud=args.baud,
             erase_first=args.erase,
         )
-    except (FlashError, FirmwareResolutionError) as exc:
+    except (FlashError, FirmwareResolutionError, MpyError) as exc:
         print(f"esp32 flash: {exc}", file=sys.stderr)
         return 1
 

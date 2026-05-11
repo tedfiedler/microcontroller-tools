@@ -1,4 +1,4 @@
-"""Small helpers shared by tools that talk to a MicroPython-running ESP32.
+"""Small helpers shared by tools that talk to an ESP32 over USB.
 
 Keeping this module private (leading underscore) because it's internal wiring,
 not part of the CLI surface.
@@ -8,35 +8,83 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from typing import Literal, overload
 
 from esp32 import discover
 
 
 class MpyError(RuntimeError):
-    """Raised for recoverable errors when driving a MicroPython device."""
+    """Raised for recoverable errors when driving a device via mpremote.
+
+    Also raised by :func:`resolve_port` for the broader "find an ESP32 on USB"
+    cases used by pre-flash flows that don't yet involve MicroPython.
+    """
 
 
-def resolve_port(explicit_port: str | None) -> str:
-    """Return a MicroPython-running ESP32's serial port.
+@overload
+def resolve_port(
+    explicit_port: str | None,
+    *,
+    prefer_micropython: bool = ...,
+    allow_empty: Literal[False] = ...,
+) -> str: ...
 
-    Prefers devices whose USB signature explicitly indicates MicroPython
-    (e.g. Arduino Nano ESP32 with PID ``0x056B``). Falls back to any single
-    detected ESP32 if no MicroPython-specific fingerprint is present —
-    generic ESP32 boards don't change VID/PID between Arduino stock and
-    MicroPython, so we can't always tell without actually talking to it.
+
+@overload
+def resolve_port(
+    explicit_port: str | None,
+    *,
+    prefer_micropython: bool = ...,
+    allow_empty: Literal[True],
+) -> str | None: ...
+
+
+def resolve_port(
+    explicit_port: str | None,
+    *,
+    prefer_micropython: bool = True,
+    allow_empty: bool = False,
+) -> str | None:
+    """Return a connected ESP32's serial port.
+
+    Args:
+        explicit_port: If non-None, returned as-is — the caller already knows
+            which port to use.
+        prefer_micropython: If True, prefer devices whose USB signature
+            explicitly indicates MicroPython (e.g. Arduino Nano ESP32 with
+            PID ``0x056B``); fall back to any single detected ESP32 otherwise.
+            Set to False for pre-flash flows where the device may still be
+            running Arduino stock firmware (generic ESP32 boards keep the
+            same VID/PID across firmwares, so this only changes behavior
+            for the Arduino Nano ESP32).
+        allow_empty: If True, return ``None`` when no devices are found
+            rather than raising. Used by the DFU-flash path where the board
+            may already be in DFU mode (no serial port enumerated).
+
+    Raises:
+        MpyError: If no device is found (and ``allow_empty`` is False), or
+            multiple candidate ESP32 devices are present.
     """
     if explicit_port is not None:
         return explicit_port
 
     devices = discover.discover(include_unknown=False)
     if not devices:
-        raise MpyError(
-            "No ESP32 devices found on USB. Plug one in running MicroPython, "
-            "or pass --port."
+        if allow_empty:
+            return None
+        hint = (
+            "Plug one in running MicroPython, or pass --port."
+            if prefer_micropython
+            else "Plug one in and try again."
         )
+        raise MpyError(f"No ESP32 devices found on USB. {hint}")
 
-    mpy = [d for d in devices if d.signature and "MicroPython" in d.signature.label]
-    candidates = mpy or devices
+    if prefer_micropython:
+        mpy = [d for d in devices if d.signature and "MicroPython" in d.signature.label]
+        candidates = mpy or devices
+    else:
+        candidates = devices
+
     if len(candidates) > 1:
         port_list = ", ".join(d.port for d in candidates)
         raise MpyError(
@@ -56,9 +104,7 @@ def mpremote_binary() -> str:
     return binary
 
 
-def run_mpremote(
-    port: str, argv: list[str], *, quiet: bool = False, echo: bool = True
-) -> int:
+def run_mpremote(port: str, argv: list[str], *, quiet: bool = False) -> int:
     """Invoke mpremote with ``connect <port>`` prefixed, streaming output.
 
     Args:
@@ -66,8 +112,6 @@ def run_mpremote(
         argv: The mpremote subcommand args (e.g. ``["fs", "ls", ":"]``).
         quiet: If True, suppress stdout/stderr and don't raise on non-zero
             exit (used for best-effort commands like speculative mkdir).
-        echo: If True and not ``quiet``, echo the full command to stdout
-            before running so the user can see what's being dispatched.
 
     Returns:
         mpremote's exit code.
@@ -77,7 +121,7 @@ def run_mpremote(
     """
     binary = mpremote_binary()
     cmd = [binary, "connect", port, *argv]
-    if echo and not quiet:
+    if not quiet:
         print(f"$ {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, check=False, capture_output=quiet)
     if not quiet and result.returncode != 0:
