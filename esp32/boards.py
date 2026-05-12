@@ -50,6 +50,10 @@ class BoardProfile:
             bootloader reuses the application VID/PID.
         dfu_alt: DFU alternate interface index (only meaningful when
             ``flash_method == "dfu"``); almost always ``0``.
+        machine_name: Prefix of ``os.uname().machine`` reported by a board
+            running this profile's firmware. Set per-board in MicroPython's
+            ``MICROPY_HW_BOARD_NAME``. Used by ``discover --probe`` to map
+            a live device back to a profile slug.
     """
 
     slug: str
@@ -61,6 +65,7 @@ class BoardProfile:
     flash_offset: int
     dfu_vid_pid: tuple[int, int] | None
     dfu_alt: int
+    machine_name: str
 
 
 ARDUINO_NANO_ESP32 = BoardProfile(
@@ -78,6 +83,7 @@ ARDUINO_NANO_ESP32 = BoardProfile(
     # application; you can tell the modes apart only by USB class descriptor.
     dfu_vid_pid=(0x2341, 0x0070),
     dfu_alt=0,
+    machine_name="Arduino Nano ESP32",
 )
 
 ESP32_GENERIC = BoardProfile(
@@ -90,6 +96,7 @@ ESP32_GENERIC = BoardProfile(
     flash_offset=0x1000,
     dfu_vid_pid=None,
     dfu_alt=0,
+    machine_name="Generic ESP32 module",
 )
 
 ESP32_GENERIC_S2 = BoardProfile(
@@ -102,6 +109,7 @@ ESP32_GENERIC_S2 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
+    machine_name="Generic ESP32S2 module",
 )
 
 ESP32_GENERIC_S3 = BoardProfile(
@@ -114,6 +122,7 @@ ESP32_GENERIC_S3 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
+    machine_name="Generic ESP32S3 module",
 )
 
 ESP32_GENERIC_C3 = BoardProfile(
@@ -126,6 +135,7 @@ ESP32_GENERIC_C3 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
+    machine_name="Generic ESP32C3 module",
 )
 
 
@@ -167,3 +177,20 @@ def infer_from_signature(signature: UsbSignature | None) -> BoardProfile | None:
     if signature is None:
         return None
     return SIGNATURE_TO_BOARD.get(signature)
+
+
+def infer_from_machine(machine: str) -> BoardProfile | None:
+    """Return the :class:`BoardProfile` matching a live device's
+    ``os.uname().machine`` string, or ``None`` if no profile matches.
+
+    ``os.uname().machine`` is formatted as
+    ``"<MICROPY_HW_BOARD_NAME> with <chip_family>"``; we match against the
+    ``machine_name`` prefix on each profile. The chip-family tail is
+    deliberately ignored — same firmware build always carries the same
+    board-name prefix, but the suffix has varied across MicroPython
+    releases (``ESP32S3`` vs ``ESP32-S3`` etc.).
+    """
+    for profile in BOARD_PROFILES:
+        if machine.startswith(profile.machine_name):
+            return profile
+    return None

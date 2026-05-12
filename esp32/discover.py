@@ -18,6 +18,7 @@ from typing import Any
 
 from serial.tools import list_ports
 
+from esp32 import boards
 from esp32.usb_ids import UsbSignature, match
 
 # NB: deliberately not importing from ``esp32._mpy`` here — ``_mpy`` already
@@ -43,6 +44,11 @@ class DiscoveredDevice:
             (``"(no mpy)"``, ``"(unknown)"``, …) when probing was
             attempted but inconclusive. ``None`` when probing was not
             requested at all.
+        profile: Board profile slug matched from the device's
+            ``os.uname().machine`` prefix (e.g. ``"ESP32_GENERIC"``,
+            ``"ARDUINO_NANO_ESP32"``). ``None`` when probing wasn't
+            requested, the probe failed, or the machine string didn't
+            match any known :class:`boards.BoardProfile`.
     """
 
     port: str
@@ -53,6 +59,7 @@ class DiscoveredDevice:
     product: str | None
     signature: UsbSignature | None
     chip: str | None = None
+    profile: str | None = None
 
     @property
     def is_likely_esp32(self) -> bool:
@@ -104,13 +111,25 @@ def _normalize_chip(raw: str) -> str:
     return tag
 
 
-def _probe_chip(port: str, *, esptool_fallback: bool = False) -> str:
-    """Probe ``port`` for its chip family. Returns a normalized label or
-    a parenthesized placeholder when probing fails.
+def _probe_identity(
+    port: str, *, esptool_fallback: bool = False
+) -> tuple[str, str | None]:
+    """Probe ``port`` for both chip family and board profile slug.
 
-    Tries ``mpremote eval`` first. If that fails and ``esptool_fallback``
-    is True, falls back to ``esptool chip-id`` (which bounces the chip
-    into the ROM bootloader — opt-in only).
+    Returns ``(chip_label, profile_slug_or_None)``. ``chip_label`` is
+    always a string — either a normalized chip name (``"ESP32-S3"``) or a
+    parenthesized placeholder (``"(no mpy)"``, ``"(connect fail)"``).
+    ``profile_slug`` is the matching :class:`boards.BoardProfile` slug
+    (``"ESP32_GENERIC"``, ``"ARDUINO_NANO_ESP32"``, …) when the
+    ``os.uname().machine`` prefix matches a known profile, or ``None``.
+
+    Mechanism: a single ``mpremote eval "__import__('os').uname().machine"``
+    invocation, whose result (e.g. ``"Generic ESP32 module with ESP32"``)
+    is parsed two ways — chip-family token at the tail, board-name prefix
+    via :func:`boards.infer_from_machine`. If ``esptool_fallback`` is True
+    and the mpremote path fails, we fall back to ``esptool chip-id``; that
+    yields only the chip (esptool can't tell us the firmware build), so
+    ``profile`` stays ``None``.
 
     Prints a short ``probing …`` progress note to stderr so the user isn't
     staring at silence for 7+s during cold USB-CDC handshakes. Stderr is
@@ -136,14 +155,17 @@ def _probe_chip(port: str, *, esptool_fallback: bool = False) -> str:
                 # the raw value. Strip surrounding quotes if present.
                 if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
                     raw = raw[1:-1]
-                return _normalize_chip(raw)
+                chip = _normalize_chip(raw)
+                profile_match = boards.infer_from_machine(raw)
+                profile = profile_match.slug if profile_match else None
+                return chip, profile
         except subprocess.TimeoutExpired:
             pass
 
     if not esptool_fallback:
-        return "(no mpy)"
+        return "(no mpy)", None
 
-    return _probe_chip_esptool(port)
+    return _probe_chip_esptool(port), None
 
 
 def _probe_chip_esptool(port: str) -> str:
@@ -215,8 +237,11 @@ def discover(
             continue
 
         chip: str | None = None
+        profile: str | None = None
         if probe and (signature is not None or port is not None):
-            chip = _probe_chip(info.device, esptool_fallback=probe_esptool)
+            chip, profile = _probe_identity(
+                info.device, esptool_fallback=probe_esptool
+            )
 
         devices.append(
             DiscoveredDevice(
@@ -228,6 +253,7 @@ def discover(
                 product=info.product,
                 signature=signature,
                 chip=chip,
+                profile=profile,
             )
         )
 
@@ -252,18 +278,24 @@ def format_table(devices: list[DiscoveredDevice]) -> str:
             "Re-run with `--all` to list other serial ports."
         )
 
-    include_chip = any(dev.chip is not None for dev in devices)
+    # Probe-derived columns appear together: if anyone has chip data we
+    # also show profile (which may still be "-" when the machine string
+    # didn't match a known board).
+    include_probe = any(dev.chip is not None for dev in devices)
 
     headers: tuple[str, ...]
     rows: list[tuple[str, ...]] = []
-    if include_chip:
-        headers = ("PORT", "VID", "PID", "BOARD / BRIDGE", "CHIP", "PRODUCT")
+    if include_probe:
+        headers = (
+            "PORT", "VID", "PID", "BOARD / BRIDGE",
+            "CHIP", "PROFILE", "PRODUCT",
+        )
     else:
         headers = ("PORT", "VID", "PID", "BOARD / BRIDGE", "PRODUCT")
 
     for dev in devices:
         label = dev.signature.label if dev.signature else "(unknown)"
-        if include_chip:
+        if include_probe:
             rows.append(
                 (
                     dev.port,
@@ -271,6 +303,7 @@ def format_table(devices: list[DiscoveredDevice]) -> str:
                     _fmt_hex(dev.pid),
                     label,
                     dev.chip or "-",
+                    dev.profile or "-",
                     dev.product or "-",
                 )
             )

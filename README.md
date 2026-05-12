@@ -32,14 +32,25 @@ esp32 discover --probe-esptool   # plus esptool fallback (invasive)
 ```
 
 USB fingerprinting alone tells you the *bridge* (CP2102, CH340, FTDI…),
-not the chip family behind it. `--probe` adds a `CHIP` column by calling
-`mpremote eval "__import__('os').uname().machine"` against each detected
-port — non-invasive, but only works on boards already running
+not the chip family behind it or which MicroPython build is running.
+`--probe` adds two columns by calling `mpremote eval
+"__import__('os').uname().machine"` against each detected port and parsing
+the result two ways:
+
+- **CHIP** — chip family (`ESP32`, `ESP32-S2`, `ESP32-S3`, `ESP32-C3`),
+  extracted from the tail of the `…with <chip>` suffix.
+- **PROFILE** — `BoardProfile` slug matched against the
+  `MICROPY_HW_BOARD_NAME` prefix (`ESP32_GENERIC`, `ESP32_GENERIC_S3`,
+  `ARDUINO_NANO_ESP32`, …). This is the slug you'd pass to
+  `esp32 flash --board <slug>`.
+
+Probing is non-invasive but only works on boards already running
 MicroPython. Cold USB-CDC connects routinely take 5–8 seconds per port,
 so this is opt-in; a `probing …` note prints to stderr so you aren't
 staring at silence. `--probe-esptool` falls back to `esptool chip-id`
 when the mpremote path fails — that one bounces the chip into the ROM
-bootloader, so don't use it casually.
+bootloader, so don't use it casually. The esptool fallback fills in
+`CHIP` only; `PROFILE` requires a running MicroPython build to query.
 
 ### Flash MicroPython firmware (Tool 2 — implemented)
 
