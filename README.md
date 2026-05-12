@@ -27,8 +27,8 @@ esp32 discover               # list ESP32-family boards plugged into USB
 esp32 discover --all         # include all USB serial ports (even non-ESP32)
 esp32 discover --json        # machine-readable output
 esp32 discover --port /dev/cu.usbmodem1101   # inspect a single port
-esp32 discover --probe       # also identify the chip behind each port
-esp32 discover --probe-esptool   # plus esptool fallback (invasive)
+esp32 discover --probe       # add CHIP + PROFILE columns (talks to each port)
+esp32 discover --probe-esptool   # plus esptool fallback for CHIP (invasive)
 ```
 
 USB fingerprinting alone tells you the *bridge* (CP2102, CH340, FTDI…),
