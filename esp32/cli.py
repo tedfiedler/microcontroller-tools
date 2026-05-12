@@ -11,6 +11,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``repl``     — Tool 5: drop into the device's MicroPython REPL.
 * ``info``     — Tool 6: one-shot summary of a connected device's state.
 * ``reset``    — Tool 7: hard- or soft-reset the device.
+* ``mip``      — Tool 8: install a MicroPython package via mip.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from esp32 import __version__, code, discover, flash, info, repl, reset, wifi
+from esp32 import __version__, code, discover, flash, info, mip, repl, reset, wifi
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -315,6 +316,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Soft-reset (Ctrl-D in REPL) instead of the default hard reset.",
     )
 
+    p_mip = subparsers.add_parser(
+        "mip",
+        help="Install a MicroPython package on the device via mip.",
+        description=(
+            "Install a MicroPython package via mip (MicroPython's "
+            "official package manager). Requires the device to have "
+            "internet access — typically Wi-Fi established at boot via "
+            "`_wifi_cfg.py`. Uses the `resume` mpremote keyword so the "
+            "wlan stack isn't soft-reset out from under the network fetch."
+        ),
+    )
+    p_mip.add_argument(
+        "package",
+        help=(
+            "Package spec. Examples: `umqtt.simple` (from the micropython-"
+            "lib registry), `github:user/repo`, `github:user/repo@branch`."
+        ),
+    )
+    p_mip.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+
     return parser
 
 
@@ -409,6 +435,8 @@ def main(argv: list[str] | None = None) -> int:
             return info.run(args)
         case "reset":
             return reset.run(args)
+        case "mip":
+            return mip.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
             parser.error(f"unknown command: {args.command!r}")
             return 2

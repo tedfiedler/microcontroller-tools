@@ -210,6 +210,27 @@ stack ~5-10s before reconnecting via another `esp32` command — the
 serial port re-enumerates and mpremote can't talk to it during that
 window.
 
+### Install MicroPython packages (Tool 8 — implemented)
+
+```sh
+esp32 mip umqtt.simple              # install from micropython-lib
+esp32 mip github:user/repo          # install from a GitHub repo
+esp32 mip github:user/repo@branch   # specific branch
+```
+
+Wraps `mpremote mip install` with auto-port resolution. Internally
+chains `mpremote ... exec "import _wifi_cfg" mip install <pkg>` in a
+single session so the wlan stack — which the soft-reset on connect
+would otherwise drop — gets re-established before mip's network fetch
+runs.
+
+**Requires `_wifi_cfg.py` on the device.** Run `esp32 wifi <SSID>
+--persist` once to create it. Without it, the auto-import errors out
+with a clear `ImportError: no module named '_wifi_cfg'` *before* mip
+even starts — the signal to set up persistent Wi-Fi first. For custom
+Wi-Fi setups, just call `mpremote ... exec '<your-setup>' mip install
+<pkg>` directly.
+
 **Replace, don't append:** if your `boot.py` already contains an inline
 `wlan.connect(...)`, swap it out for `import _wifi_cfg` rather than
 adding alongside. Back-to-back connects in the same boot trip ESP32
