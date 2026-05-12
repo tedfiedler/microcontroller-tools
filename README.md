@@ -174,6 +174,26 @@ auto-port resolution as `push`/`pull`/`wifi`. Implemented via
 `os.execvp` so terminal control sequences pass through directly — exit
 with `Ctrl-]`, just like `mpremote repl` natively.
 
+### Device info (Tool 6 — implemented)
+
+```sh
+esp32 info                  # one-shot summary of the connected device
+esp32 info --json           # same data, machine-readable
+```
+
+One mpremote round-trip pulls everything in a single shot: USB ID and
+bridge, chip, profile slug, MicroPython version, MAC, heap usage,
+filesystem usage, current Wi-Fi state (active / connected / SSID /
+ifconfig). The on-device probe script is sent through the same host
+tempfile + `mpremote run` pattern as `wifi` and `pull --all`.
+
+**Caveat — Wi-Fi state.** `mpremote run` does a soft reset before
+executing scripts. `_wifi_cfg.py` auto-connects only at *hard*-boot via
+`boot.py`, so a recent series of `mpremote run`/`mpremote eval`
+invocations may have left the STA interface inactive. `info` faithfully
+reports point-in-time state; hard-reset (`mpremote reset`) and re-run
+`info` if you want the boot-time picture.
+
 **Replace, don't append:** if your `boot.py` already contains an inline
 `wlan.connect(...)`, swap it out for `import _wifi_cfg` rather than
 adding alongside. Back-to-back connects in the same boot trip ESP32

@@ -9,6 +9,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``ls``       — Tool 3c (implemented): list files on the device.
 * ``wifi``     — Tool 4 (implemented): configure Wi-Fi (DHCP or static IP).
 * ``repl``     — Tool 5: drop into the device's MicroPython REPL.
+* ``info``     — Tool 6: one-shot summary of a connected device's state.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from esp32 import __version__, code, discover, flash, repl, wifi
+from esp32 import __version__, code, discover, flash, info, repl, wifi
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -268,6 +269,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Serial port (default: auto-detect a MicroPython-running ESP32).",
     )
 
+    p_info = subparsers.add_parser(
+        "info",
+        help="Print a one-shot summary of the connected device.",
+        description=(
+            "Combine USB-level info (port, VID/PID, bridge) with on-device "
+            "state (chip, profile, MicroPython version, MAC, heap, "
+            "filesystem usage, Wi-Fi). Single mpremote round trip."
+        ),
+    )
+    p_info.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+    p_info.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit JSON instead of the aligned text block.",
+    )
+
     return parser
 
 
@@ -358,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
             return wifi.run(args)
         case "repl":
             return repl.run(args)
+        case "info":
+            return info.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
             parser.error(f"unknown command: {args.command!r}")
             return 2

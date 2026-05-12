@@ -88,7 +88,7 @@ _ESPTOOL_TIMEOUT_SECS = 30.0
 _CHIP_TOKEN_RE = re.compile(r"ESP32[A-Z0-9-]*", re.IGNORECASE)
 
 
-def _normalize_chip(raw: str) -> str:
+def normalize_chip(raw: str) -> str:
     """Extract and normalize an ESP32 chip family from a uname-style string.
 
     Examples::
@@ -155,7 +155,7 @@ def _probe_identity(
                 # the raw value. Strip surrounding quotes if present.
                 if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
                     raw = raw[1:-1]
-                chip = _normalize_chip(raw)
+                chip = normalize_chip(raw)
                 profile_match = boards.infer_from_machine(raw)
                 profile = profile_match.slug if profile_match else None
                 return chip, profile
@@ -192,7 +192,7 @@ def _probe_chip_esptool(port: str) -> str:
     for line in result.stdout.splitlines():
         stripped = line.strip()
         if stripped.startswith("Chip is "):
-            return _normalize_chip(stripped[len("Chip is "):])
+            return normalize_chip(stripped[len("Chip is "):])
     return "(unknown)"
 
 
