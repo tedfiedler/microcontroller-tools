@@ -54,6 +54,26 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Inspect only the given port path (e.g. /dev/cu.usbmodem1101).",
     )
+    p_discover.add_argument(
+        "--probe",
+        dest="probe",
+        action="store_true",
+        help=(
+            "Talk to each detected port to identify the actual ESP32 chip "
+            "family (adds a CHIP column). Uses `mpremote eval` — "
+            "non-invasive, only works on ports already running MicroPython."
+        ),
+    )
+    p_discover.add_argument(
+        "--probe-esptool",
+        dest="probe_esptool",
+        action="store_true",
+        help=(
+            "Fall back to `esptool chip-id` when the mpremote probe fails. "
+            "More invasive — bounces the chip into the ROM bootloader. "
+            "Implies --probe."
+        ),
+    )
 
     p_flash = subparsers.add_parser(
         "flash",
@@ -223,9 +243,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _run_discover(args: argparse.Namespace) -> int:
     """Handle the ``discover`` subcommand and render the result."""
+    # --probe-esptool implies --probe.
+    probe = args.probe or args.probe_esptool
     devices = discover.discover(
         include_unknown=args.include_unknown,
         port=args.port,
+        probe=probe,
+        probe_esptool=args.probe_esptool,
     )
     if args.as_json:
         print(discover.format_json(devices))

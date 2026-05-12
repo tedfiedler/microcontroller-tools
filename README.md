@@ -27,7 +27,19 @@ esp32 discover               # list ESP32-family boards plugged into USB
 esp32 discover --all         # include all USB serial ports (even non-ESP32)
 esp32 discover --json        # machine-readable output
 esp32 discover --port /dev/cu.usbmodem1101   # inspect a single port
+esp32 discover --probe       # also identify the chip behind each port
+esp32 discover --probe-esptool   # plus esptool fallback (invasive)
 ```
+
+USB fingerprinting alone tells you the *bridge* (CP2102, CH340, FTDI…),
+not the chip family behind it. `--probe` adds a `CHIP` column by calling
+`mpremote eval "__import__('os').uname().machine"` against each detected
+port — non-invasive, but only works on boards already running
+MicroPython. Cold USB-CDC connects routinely take 5–8 seconds per port,
+so this is opt-in; a `probing …` note prints to stderr so you aren't
+staring at silence. `--probe-esptool` falls back to `esptool chip-id`
+when the mpremote path fails — that one bounces the chip into the ROM
+bootloader, so don't use it casually.
 
 ### Flash MicroPython firmware (Tool 2 — implemented)
 
