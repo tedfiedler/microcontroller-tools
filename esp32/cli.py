@@ -12,6 +12,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``info``     — Tool 6: one-shot summary of a connected device's state.
 * ``reset``    — Tool 7: hard- or soft-reset the device.
 * ``mip``      — Tool 8: install a MicroPython package via mip.
+* ``lint``     — Tool 9: static analysis for chip-pin hazards.
 """
 
 from __future__ import annotations
@@ -21,7 +22,18 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from esp32 import __version__, code, discover, flash, info, mip, repl, reset, wifi
+from esp32 import (
+    __version__,
+    code,
+    discover,
+    flash,
+    info,
+    lint,
+    mip,
+    repl,
+    reset,
+    wifi,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -316,6 +328,46 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Soft-reset (Ctrl-D in REPL) instead of the default hard reset.",
     )
 
+    p_lint = subparsers.add_parser(
+        "lint",
+        help="Static-analyze MicroPython source for chip-pin hazards.",
+        description=(
+            "AST-walks the given file or directory, flags Pin(N) calls "
+            "(and peripheral kwargs like scl=, sck=) that hit reserved, "
+            "strapping, or input-only pins on the target chip family. "
+            "Use --chip to skip the device probe; --json for "
+            "machine-readable output. Exit code = number of errors."
+        ),
+    )
+    p_lint.add_argument(
+        "target",
+        help="Python file or directory to lint.",
+    )
+    p_lint.add_argument(
+        "--chip",
+        dest="chip",
+        default=None,
+        help=(
+            "Chip family to check against (e.g. ESP32). Default: probe "
+            "the connected device. Pass explicitly to skip the probe."
+        ),
+    )
+    p_lint.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help=(
+            "Serial port for the device probe (used only when --chip "
+            "isn't given). Default: auto-detect."
+        ),
+    )
+    p_lint.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit JSON instead of the aligned text block.",
+    )
+
     p_mip = subparsers.add_parser(
         "mip",
         help="Install a MicroPython package on the device via mip.",
@@ -437,6 +489,8 @@ def main(argv: list[str] | None = None) -> int:
             return reset.run(args)
         case "mip":
             return mip.run(args)
+        case "lint":
+            return lint.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
             parser.error(f"unknown command: {args.command!r}")
             return 2
