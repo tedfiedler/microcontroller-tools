@@ -29,6 +29,7 @@ esp32 discover --json        # machine-readable output
 esp32 discover --port /dev/cu.usbmodem1101   # inspect a single port
 esp32 discover --probe       # add CHIP + PROFILE columns (talks to each port)
 esp32 discover --probe-esptool   # plus esptool fallback for CHIP (invasive)
+esp32 discover --doc         # also drop a <CHIP>.md pin reference into cwd
 ```
 
 USB fingerprinting alone tells you the *bridge* (CP2102, CH340, FTDI…),
@@ -51,6 +52,14 @@ staring at silence. `--probe-esptool` falls back to `esptool chip-id`
 when the mpremote path fails — that one bounces the chip into the ROM
 bootloader, so don't use it casually. The esptool fallback fills in
 `CHIP` only; `PROFILE` requires a running MicroPython build to query.
+
+`--doc` (implies `--probe`) drops a `<CHIP>.md` pin-reference file into
+the current directory for each detected chip family — a short header
+notes the detected port and PROFILE, followed by chip-family info
+that's uniform across boards using that silicon (GPIO map, strapping
+pins, ADC/DAC/touch channels, UART/I²C/SPI conventions). Today only
+`ESP32.md` ships; S2 / S3 / C3 templates will be added as boards are
+verified against hardware.
 
 ### Flash MicroPython firmware (Tool 2 — implemented)
 
