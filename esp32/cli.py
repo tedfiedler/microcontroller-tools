@@ -10,6 +10,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``wifi``     — Tool 4 (implemented): configure Wi-Fi (DHCP or static IP).
 * ``repl``     — Tool 5: drop into the device's MicroPython REPL.
 * ``info``     — Tool 6: one-shot summary of a connected device's state.
+* ``reset``    — Tool 7: hard- or soft-reset the device.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from esp32 import __version__, code, discover, flash, info, repl, wifi
+from esp32 import __version__, code, discover, flash, info, repl, reset, wifi
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -291,6 +292,29 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Emit JSON instead of the aligned text block.",
     )
 
+    p_reset = subparsers.add_parser(
+        "reset",
+        help="Reset the device (hard by default; --soft for a REPL soft-reset).",
+        description=(
+            "Reboot the device. Hard reset (default) toggles DTR/RTS — "
+            "equivalent to a power-cycle for boot.py purposes. --soft "
+            "sends Ctrl-D in the REPL instead, which clears Python state "
+            "and re-runs main.py without a full hardware reset."
+        ),
+    )
+    p_reset.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+    p_reset.add_argument(
+        "--soft",
+        dest="soft",
+        action="store_true",
+        help="Soft-reset (Ctrl-D in REPL) instead of the default hard reset.",
+    )
+
     return parser
 
 
@@ -383,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
             return repl.run(args)
         case "info":
             return info.run(args)
+        case "reset":
+            return reset.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
             parser.error(f"unknown command: {args.command!r}")
             return 2

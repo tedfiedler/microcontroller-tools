@@ -191,8 +191,24 @@ tempfile + `mpremote run` pattern as `wifi` and `pull --all`.
 executing scripts. `_wifi_cfg.py` auto-connects only at *hard*-boot via
 `boot.py`, so a recent series of `mpremote run`/`mpremote eval`
 invocations may have left the STA interface inactive. `info` faithfully
-reports point-in-time state; hard-reset (`mpremote reset`) and re-run
+reports point-in-time state; hard-reset (`esp32 reset`) and re-run
 `info` if you want the boot-time picture.
+
+### Reset (Tool 7 — implemented)
+
+```sh
+esp32 reset                 # hard reset (DTR/RTS toggle; ~= power-cycle)
+esp32 reset --soft          # Ctrl-D in REPL; clears Python state, re-runs main.py
+esp32 reset --port /dev/ttyUSB0
+```
+
+Wraps `mpremote reset` / `mpremote soft-reset` with the same auto-port
+resolution as everything else. Hard reset is the right choice when you
+want `boot.py` (and therefore `_wifi_cfg.py`) to re-run; soft reset
+just bounces the Python interpreter. After a hard reset, give the USB
+stack ~5-10s before reconnecting via another `esp32` command — the
+serial port re-enumerates and mpremote can't talk to it during that
+window.
 
 **Replace, don't append:** if your `boot.py` already contains an inline
 `wlan.connect(...)`, swap it out for `import _wifi_cfg` rather than
