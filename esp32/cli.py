@@ -8,6 +8,7 @@ Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
 * ``pull``     — Tool 3b (implemented): download code from the device via mpremote.
 * ``ls``       — Tool 3c (implemented): list files on the device.
 * ``wifi``     — Tool 4 (implemented): configure Wi-Fi (DHCP or static IP).
+* ``repl``     — Tool 5: drop into the device's MicroPython REPL.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from esp32 import __version__, code, discover, flash, wifi
+from esp32 import __version__, code, discover, flash, repl, wifi
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -251,6 +252,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     wifi.add_arguments(p_wifi)
 
+    p_repl = subparsers.add_parser(
+        "repl",
+        help="Drop into the MicroPython REPL on the connected device.",
+        description=(
+            "Replaces the current process with `mpremote connect <port> "
+            "repl`, so terminal escapes (Ctrl-] to exit) pass through "
+            "directly. Auto-detects the port if --port isn't given."
+        ),
+    )
+    p_repl.add_argument(
+        "--port",
+        dest="port",
+        default=None,
+        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+    )
+
     return parser
 
 
@@ -339,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
             return code.run_ls(args)
         case "wifi":
             return wifi.run(args)
+        case "repl":
+            return repl.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this
             parser.error(f"unknown command: {args.command!r}")
             return 2
