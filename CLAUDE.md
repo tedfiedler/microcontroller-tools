@@ -11,38 +11,51 @@ an answer, state the uncertainty and suggest validation steps.
 
 # Project: microcontroller tools
 
-A set of CLI tools for working with microcontrollers. All four originally-
-planned tools are implemented and exposed through a single `esp32` console
-script:
+A set of CLI tools for working with microcontrollers. Two device
+families supported today, exposed through two console scripts that
+share the same subcommand structure:
 
-1. `esp32 discover` — list devices connected via USB (VID/PID fingerprinted)
-2. `esp32 flash`    — flash MicroPython firmware onto a device
-3. `esp32 push` / `pull` / `ls` — move code files to/from the device
-4. `esp32 wifi`     — connect the device's Wi-Fi, optionally with a static IP
+- **`esp32`** — ESP32-family (classic ESP32, S2, S3, C3, Arduino Nano ESP32).
+- **`pico`** — Raspberry Pi Pico-family (RP2040 + RP2350; Pico / Pico W / Pico 2 / Pico 2 W).
+
+Shared subcommands: `discover`, `flash`, `push`, `pull`, `ls`, `wifi`,
+`repl`, `info`, `reset`, `mip`, `lint`.
 
 ## Architecture
-1. python 3.14, managed with `uv` (`uv sync --extra dev`, `uv run esp32 ...`)
-2. Tools are command-line; one `esp32` entry point with subcommands
+1. python 3.14, managed with `uv` (`uv sync --extra dev`, `uv run esp32 ...` / `uv run pico ...`)
+2. Tools are command-line; one entry point per device family with shared subcommands.
 3. Third-party tooling wrapped as subprocesses:
    - `esptool` (pypi dep) — generic ESP32 flashing
    - `dfu-util` (brew install) — Arduino Nano ESP32 flashing
-   - `mpremote` (pypi dep) — push/pull/ls and on-device exec for `wifi`
+   - `picotool` (optional, apt / brew) — Pico flashing fallback when no BOOTSEL mount is available
+   - `mpremote` (pypi dep) — push/pull/ls, REPL, on-device exec / probe scripts
 
 ## Code conventions
 1. Use doc strings and well document classes, methods, and functions
 2. use dataclasses for modeling if needed
-3. strict typing — `mypy --strict esp32/` must pass
-4. follow pep standards — `ruff check esp32/` must pass
+3. strict typing — `mypy --strict esp32/ common/ pico/` must pass
+4. follow pep standards — `ruff check esp32/ common/ pico/` must pass
 
 ## Project conventions
-1. Keep code in device-family directories (`esp32/`). The original spec said
-   `arduino-nano-esp32`, but we went family-level because the tools span
-   multiple ESP32 variants. Drop to per-board dirs only if behavior diverges.
-2. One module per tool under `esp32/`: `discover.py`, `flash.py`, `code.py`
-   (push/pull/ls), `wifi.py`. Shared mpremote / port-resolution helpers live
-   in `_mpy.py`. USB fingerprint table in `usb_ids.py`, board profiles in
-   `boards.py`, firmware URL resolution in `firmware.py`.
-3. Run `mypy --strict esp32/` and `ruff check esp32/` before committing.
+1. Three top-level packages:
+   - `common/` — chip-agnostic shared modules. Holds the mpremote primitives
+     (`_mpy.py`), the FamilyContext dataclass (`family.py`), and the
+     subcommand runners that don't depend on which chip is connected
+     (`code.py`, `repl.py`, `reset.py`, `mip.py`, `wifi.py`, plus the
+     `info` probe + dataclass + formatters in `info.py` and the lint
+     AST walker + formatters in `lint.py`).
+   - `esp32/` and `pico/` — device-family packages. Each holds its own
+     `usb_ids.py`, `boards.py`, `discover.py`, `flash.py`, `firmware.py`,
+     `pin_rules.py`, plus thin wrappers (`info.py`, `lint.py`) that
+     supply family-specific data to the shared runners, plus a `cli.py`
+     that builds a `FamilyContext` and dispatches subcommands.
+2. Adding a new chip family means creating a new sibling package next to
+   `esp32/` / `pico/` with the same shape, registering its console
+   script in `pyproject.toml`, and adding the directory to the
+   `packages = [...]` line of `[tool.hatch.build.targets.wheel]`. The
+   shared runners under `common/` are reused as-is.
+3. Run `mypy --strict esp32/ common/ pico/` and
+   `ruff check esp32/ common/ pico/` before committing.
 
 ## Things to always do
 1. always commit code
@@ -61,8 +74,19 @@ script:
 - **Wi-Fi connect needs a reset dance.** ESP32 MicroPython's STA interface
   throws "Wifi Internal State Error" if you call `wlan.connect()` after
   another session left it active. Always `disconnect()` + `active(False→True)`
-  before connecting.
+  before connecting. The same connect script runs on Pico W (cyw43)
+  unchanged; reset dance is harmless there.
 - **mpremote `fs -r cp` has a flat-dir bug.** When the source directory
   has zero subdirectories and the destination doesn't exist yet, mpremote's
   recursive walker falls through to a non-recursive cp that errors out.
-  `code.py` detects and works around this — don't "simplify" it away.
+  `common/code.py` detects and works around this — don't "simplify" it away.
+- **Pico W ≠ Pico at the BOOTSEL layer.** The BOOTSEL ROM bootloader's
+  `INFO_UF2.TXT` exposes chip family (RP2040 / RP2350) but says nothing
+  about the cyw43 module's presence. `pico flash` therefore defaults to
+  the non-W board slug and prints a reminder to pass `--board RPI_PICO_W`
+  (or `RPI_PICO2_W`) for W variants. Don't try to detect W-ness via
+  USB-level fields; it isn't there.
+- **esptool 5.x changed the chip-id output.** The legacy `Chip is …`
+  line was replaced by `Chip type:` and `Detecting chip type… <FAMILY>`.
+  `esp32/discover.py` parses both prefixes plus a broad regex fallback;
+  if you add new chip support, leave the broad fallback in place.
