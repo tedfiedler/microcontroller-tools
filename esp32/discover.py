@@ -169,10 +169,18 @@ def _probe_identity(
 
 
 def _probe_chip_esptool(port: str) -> str:
-    """Run ``esptool chip-id`` and parse the ``Chip is …`` line.
+    """Run ``esptool chip-id`` and parse the chip-family line out of stdout.
 
-    Newer esptool uses ``chip-id``; older versions use ``chip_id``. Both
-    print a ``Chip is <family> (revision …)`` line on success.
+    Output format has drifted across esptool releases:
+
+    * esptool 4.x and earlier: ``Chip is ESP32-C3 (revision v0.3)``
+    * esptool 5.x: ``Chip type:          ESP32-C3 AZ (QFN32) (revision v1.1)``
+      and ``Detecting chip type... ESP32-C3``
+
+    Rather than chase prefixes forever, we let :func:`normalize_chip`
+    pull the chip token out of any line that contains one — preferring
+    the explicit ``Chip type:`` / ``Chip is`` declaration lines, and
+    falling back to scanning all of stdout if neither is present.
     """
     binary = shutil.which("esptool") or shutil.which("esptool.py")
     if binary is None:
@@ -189,10 +197,17 @@ def _probe_chip_esptool(port: str) -> str:
         return "(timeout)"
     if result.returncode != 0:
         return "(connect fail)"
+    # Prefer the explicit declaration lines when present.
     for line in result.stdout.splitlines():
         stripped = line.strip()
-        if stripped.startswith("Chip is "):
-            return normalize_chip(stripped[len("Chip is "):])
+        for prefix in ("Chip type:", "Chip is "):
+            if stripped.startswith(prefix):
+                return normalize_chip(stripped[len(prefix):])
+    # Fallback: scan the whole stdout. normalize_chip takes the last
+    # ESP32* token it finds, which on every esptool version observed so
+    # far is the actual chip family.
+    if _CHIP_TOKEN_RE.search(result.stdout):
+        return normalize_chip(result.stdout)
     return "(unknown)"
 
 
