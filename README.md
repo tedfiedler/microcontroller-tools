@@ -51,6 +51,7 @@ esp32 discover --doc         # also drop a <CHIP>.md pin reference into cwd
 
 pico discover                # list Pico-family boards (serial + BOOTSEL)
 pico discover --probe        # add CHIP + PROFILE for serial-mode Picos
+pico discover --doc          # also drop RP2040.md / RP2350.md into cwd
 ```
 
 USB fingerprinting alone tells you the *bridge* (CP2102, CH340, FTDI…),
@@ -76,14 +77,17 @@ bounces the chip into the ROM bootloader, so don't use it casually.
 The esptool fallback fills in `CHIP` only; `PROFILE` requires a
 running MicroPython build to query.
 
-`--doc` (esp32 only, implies `--probe`) drops a `<CHIP>.md`
-pin-reference file into the current directory for each detected chip
-family — a short header notes the detected port and PROFILE, followed
-by chip-family info that's uniform across boards using that silicon
-(GPIO map, strapping pins, ADC/DAC/touch channels, UART/I²C/SPI
-conventions). Today only `ESP32.md` ships for the esp32 CLI;
-`pico/docs/RP2040.md` and `RP2350.md` are bundled in the wheel for
-direct reference too.
+`--doc` (implies `--probe`) drops a `<CHIP>.md` pin-reference file
+into the current directory for each detected chip family — a short
+header notes the detected port and PROFILE, followed by chip-family
+info that's uniform across boards using that silicon (GPIO map,
+strapping pins, ADC/DAC/touch channels, UART/I²C/SPI conventions).
+Available on both CLIs: `esp32 discover --doc` ships `ESP32.md` today
+(S2/S3/C3 templates added as boards are verified against hardware);
+`pico discover --doc` ships `RP2040.md` and `RP2350.md`. For Pico
+devices in BOOTSEL mode the chip family comes from `INFO_UF2.TXT` on
+the mounted volume, so `--doc` works without `--probe` connecting to
+a serial REPL.
 
 **Pico-specific:** `pico discover` recognizes two modes a Pico can
 show up in. **Serial mode** — board is running firmware, enumerates
