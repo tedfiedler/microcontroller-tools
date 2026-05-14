@@ -27,7 +27,7 @@ dev = [
 esp32 = "esp32.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["esp32"]
+packages = ["common", "esp32"]
 
 [tool.mypy]
 strict = true

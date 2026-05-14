@@ -1,12 +1,15 @@
-"""Tool 3: Push/pull code between the host and an ESP32 running MicroPython.
+"""Push/pull/ls code between the host and a MicroPython device.
 
 Wraps the official ``mpremote`` CLI so we get its well-tested filesystem
-protocol (paste mode + raw REPL) without reimplementing any of it. Three
-user-facing operations:
+protocol (paste mode + raw REPL) without reimplementing any of it.
+Chip-agnostic — both the ``esp32`` and ``pico`` CLIs dispatch here,
+supplying their own port resolver via :class:`common.family.FamilyContext`.
 
-* ``esp32 push <local> [remote]`` — copy a file or directory onto the device.
-* ``esp32 pull <remote> [local]`` — copy a file or directory off the device.
-* ``esp32 ls   [remote]``         — list files on the device.
+User-facing operations:
+
+* ``<cli> push <local> [remote]`` — copy a file or directory onto the device.
+* ``<cli> pull <remote> [local]`` — copy a file or directory off the device.
+* ``<cli> ls   [remote]``         — list files on the device.
 
 Remote paths are **unprefixed** at our CLI layer (``main.py``, ``/lib/foo``)
 and get the ``:`` prefix mpremote expects added automatically. Host paths
@@ -20,7 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from esp32._mpy import MpyError, resolve_port, run_mpremote, run_mpremote_capture
+from common._mpy import MpyError, run_mpremote, run_mpremote_capture
+from common.family import FamilyContext
 
 
 class CodeError(RuntimeError):
@@ -52,20 +56,20 @@ def _resolve_push_remote(local: Path, remote_arg: str | None) -> str:
 
     If the user gave an explicit remote path, use it. Otherwise default to
     the device filesystem root plus the source's basename, so
-    ``esp32 push app.py`` lands at ``:app.py``.
+    ``push app.py`` lands at ``:app.py``.
     """
     if remote_arg is not None:
         return _remote(remote_arg)
     return _remote(local.name)
 
 
-def run_push(args: argparse.Namespace) -> int:
-    """Entry point for ``esp32 push``."""
+def run_push(args: argparse.Namespace, *, family: FamilyContext) -> int:
+    """Entry point for ``<cli> push``."""
     try:
         local = Path(args.local).expanduser()
         if not local.exists():
             raise CodeError(f"local path does not exist: {local}")
-        port = resolve_port(args.port)
+        port = family.resolve_port(args.port)
         remote = _resolve_push_remote(local, args.remote)
 
         if local.is_file():
@@ -73,7 +77,7 @@ def run_push(args: argparse.Namespace) -> int:
         else:
             _push_directory(port, local, remote)
     except (CodeError, MpyError) as exc:
-        print(f"esp32 push: {exc}", file=sys.stderr)
+        print(f"{family.name} push: {exc}", file=sys.stderr)
         return 1
     return 0
 
@@ -118,10 +122,10 @@ def _resolve_pull_local(remote: str, local_arg: str | None) -> Path:
     return Path(basename) if basename else Path(".")
 
 
-def run_pull(args: argparse.Namespace) -> int:
-    """Entry point for ``esp32 pull``."""
+def run_pull(args: argparse.Namespace, *, family: FamilyContext) -> int:
+    """Entry point for ``<cli> pull``."""
     try:
-        port = resolve_port(args.port)
+        port = family.resolve_port(args.port)
 
         if args.all_into is not None:
             if args.remote is not None:
@@ -146,7 +150,7 @@ def run_pull(args: argparse.Namespace) -> int:
 
         run_mpremote(port, fs_argv, echo=not args.quiet)
     except (CodeError, MpyError) as exc:
-        print(f"esp32 pull: {exc}", file=sys.stderr)
+        print(f"{family.name} pull: {exc}", file=sys.stderr)
         return 1
     return 0
 
@@ -259,13 +263,13 @@ def _pull_all(port: str, into: Path, *, quiet: bool = False) -> None:
 # ---------- ls ---------------------------------------------------------------
 
 
-def run_ls(args: argparse.Namespace) -> int:
-    """Entry point for ``esp32 ls``."""
+def run_ls(args: argparse.Namespace, *, family: FamilyContext) -> int:
+    """Entry point for ``<cli> ls``."""
     try:
-        port = resolve_port(args.port)
+        port = family.resolve_port(args.port)
         remote = _remote(args.remote) if args.remote else ":"
         run_mpremote(port, ["fs", "ls", remote])
     except (CodeError, MpyError) as exc:
-        print(f"esp32 ls: {exc}", file=sys.stderr)
+        print(f"{family.name} ls: {exc}", file=sys.stderr)
         return 1
     return 0

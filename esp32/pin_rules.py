@@ -1,39 +1,22 @@
 """Chip-family pin rules consumed by ``esp32 lint``.
 
-Hand-curated alongside the chip-doc markdown templates in ``esp32/docs/``.
-The two are intentionally kept separate: the markdown is for humans, this
-file is for the linter. Adding a new chip means writing entries in both,
-which is fine for the small number of supported chip families.
+Hand-curated alongside the chip-doc markdown templates in
+:mod:`esp32.docs`. The two are intentionally kept separate: the
+markdown is for humans, this file is for the linter. Adding a new
+chip means writing entries in both, which is fine for the small
+number of supported chip families.
+
+The :class:`PinRule` schema and ``Severity`` literal live in
+:mod:`common.lint` — they're shared with the Pico rule set.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from common.lint import PinRule
 
-Severity = Literal["error", "warning", "note"]
-
-
-@dataclass(frozen=True)
-class PinRule:
-    """A rule applying to one or more GPIO numbers of a chip family.
-
-    Attributes:
-        pins: GPIO numbers the rule covers.
-        severity: Lint severity. ``"error"`` (reserved pins — using them
-            crashes the chip), ``"warning"`` (strapping pins — risky at
-            boot), or ``"note"`` (advisory — e.g. input-only pins).
-        reason: Human-readable explanation, included verbatim after
-            ``"Pin(N) is "`` in the diagnostic.
-        output_only: If True, the rule fires only when the pin is used as
-            an output (``Pin.OUT``). Used for input-only-pin advisories —
-            harmless when used as inputs.
-    """
-
-    pins: tuple[int, ...]
-    severity: Severity
-    reason: str
-    output_only: bool = False
+# Re-exported here so callers who care about ESP32 rules don't need to
+# reach into common/ just to spell the type.
+__all__ = ["ESP32_RULES", "RULES_BY_CHIP", "PinRule", "chips_with_rules", "rules_for_chip"]
 
 
 ESP32_RULES: tuple[PinRule, ...] = (

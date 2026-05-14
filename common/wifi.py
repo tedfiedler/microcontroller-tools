@@ -1,17 +1,21 @@
-"""Tool 4: configure the ESP32's Wi-Fi STA interface from the host.
+"""Configure a MicroPython device's Wi-Fi STA interface from the host.
 
-Drives the device via ``mpremote exec`` — we assemble a small MicroPython
-script that activates ``network.WLAN(network.STA_IF)``, optionally sets a
-static ``ifconfig``, connects to an SSID, waits for association, and prints
-the resulting interface configuration.
+Drives the device via ``mpremote run`` against a host-built tempfile —
+we assemble a small MicroPython script that activates
+``network.WLAN(network.STA_IF)``, optionally sets a static ``ifconfig``,
+connects to an SSID, waits for association, and prints the resulting
+interface configuration.
+
+The ``network.WLAN(STA_IF)`` API is identical on ESP32 MicroPython and
+Pico W MicroPython (cyw43-based), so this module is shared.
 
 Flows:
 
-* ``esp32 wifi <SSID>``             — connect (DHCP), prompts for password.
-* ``esp32 wifi <SSID> --open``      — connect to an open (no-password) AP.
-* ``esp32 wifi <SSID> --ip 192.168.1.100 ...`` — connect with a static IP.
-* ``esp32 wifi --status``           — just print the current interface state.
-* ``esp32 wifi <SSID> ... --persist`` — also write a ``_wifi_cfg.py`` on the
+* ``<cli> wifi <SSID>``             — connect (DHCP), prompts for password.
+* ``<cli> wifi <SSID> --open``      — connect to an open (no-password) AP.
+* ``<cli> wifi <SSID> --ip 192.168.1.100 ...`` — connect with a static IP.
+* ``<cli> wifi --status``           — just print the current interface state.
+* ``<cli> wifi <SSID> ... --persist`` — also write a ``_wifi_cfg.py`` on the
   device so it reconnects at boot. The user adds ``import _wifi_cfg`` to
   ``boot.py`` (or ``main.py``) themselves.
 
@@ -30,7 +34,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from esp32._mpy import MpyError, mpremote_binary, resolve_port, run_mpremote
+from common._mpy import MpyError, mpremote_binary, run_mpremote
+from common.family import FamilyContext
 
 
 class WifiError(RuntimeError):
@@ -106,7 +111,8 @@ def _build_connect_script(cfg: WifiConfig) -> str:
         [
             # ESP32 MicroPython wlan.status() codes. Translate the most
             # useful ones so the on-device error is actionable rather than
-            # just an integer.
+            # just an integer. The Pico W's cyw43 stack uses overlapping
+            # but not identical codes; unknown values fall through to '?'.
             "_S = {201:'wrong password', 202:'AP not found', "
             "203:'connect failed', 204:'no ap found', 1000:'idle', "
             "1001:'connecting', 1010:'got ip'}",
@@ -216,12 +222,12 @@ def _persist_config(port: str, cfg: WifiConfig) -> None:
     )
 
 
-def run(args: argparse.Namespace) -> int:
-    """Entry point for the ``esp32 wifi`` subcommand."""
+def run(args: argparse.Namespace, *, family: FamilyContext) -> int:
+    """Entry point for the ``<cli> wifi`` subcommand."""
     try:
         # Make sure mpremote is available before we start soliciting passwords.
         mpremote_binary()
-        port = resolve_port(args.port)
+        port = family.resolve_port(args.port)
 
         if args.status:
             _exec_script(port, _build_status_script())
@@ -257,7 +263,7 @@ def run(args: argparse.Namespace) -> int:
         if args.persist:
             _persist_config(port, cfg)
     except (WifiError, MpyError) as exc:
-        print(f"esp32 wifi: {exc}", file=sys.stderr)
+        print(f"{family.name} wifi: {exc}", file=sys.stderr)
         return 1
     return 0
 
@@ -332,5 +338,5 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--port",
         default=None,
-        help="Serial port (default: auto-detect a MicroPython-running ESP32).",
+        help="Serial port (default: auto-detect a MicroPython-running device).",
     )

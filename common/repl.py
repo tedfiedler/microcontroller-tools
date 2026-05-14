@@ -1,4 +1,4 @@
-"""Tool 5: drop into the MicroPython REPL on the connected device.
+"""Drop into the MicroPython REPL on the connected device.
 
 A thin wrapper over ``mpremote repl`` that adds the same auto-port
 resolution used by the rest of the CLI. Uses :func:`os.execvp` to
@@ -14,11 +14,12 @@ import argparse
 import os
 import sys
 
-from esp32._mpy import MpyError, mpremote_binary, resolve_port
+from common._mpy import MpyError, mpremote_binary
+from common.family import FamilyContext
 
 
-def run(args: argparse.Namespace) -> int:
-    """Entry point for ``esp32 repl``.
+def run(args: argparse.Namespace, *, family: FamilyContext) -> int:
+    """Entry point for ``<cli> repl``.
 
     Resolves the port, prints the invocation for transparency (so the
     user sees which port auto-detection chose), then execs mpremote.
@@ -27,10 +28,10 @@ def run(args: argparse.Namespace) -> int:
     returns and mpremote's exit code becomes the shell's.
     """
     try:
-        port = resolve_port(args.port)
+        port = family.resolve_port(args.port)
         binary = mpremote_binary()
     except MpyError as exc:
-        print(f"esp32 repl: {exc}", file=sys.stderr)
+        print(f"{family.name} repl: {exc}", file=sys.stderr)
         return 1
 
     cmd = [binary, "connect", port, "repl"]

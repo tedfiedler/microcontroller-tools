@@ -1,18 +1,23 @@
 """CLI entry point for the ``esp32`` console script.
 
-Exposes subcommands for each of the four tools described in ``CLAUDE.md``:
+Exposes subcommands for each of the supported tools. The bulk of the
+runners live in :mod:`common` and are chip-agnostic — this module
+supplies the ESP32 :class:`common.family.FamilyContext` that adapts
+them to the ESP32 USB-fingerprint world.
 
-* ``discover`` — Tool 1 (implemented): enumerate ESP32-family USB devices.
-* ``flash``    — Tool 2 (implemented): write MicroPython firmware.
-* ``push``     — Tool 3a (implemented): upload code to the device via mpremote.
-* ``pull``     — Tool 3b (implemented): download code from the device via mpremote.
-* ``ls``       — Tool 3c (implemented): list files on the device.
-* ``wifi``     — Tool 4 (implemented): configure Wi-Fi (DHCP or static IP).
-* ``repl``     — Tool 5: drop into the device's MicroPython REPL.
-* ``info``     — Tool 6: one-shot summary of a connected device's state.
-* ``reset``    — Tool 7: hard- or soft-reset the device.
-* ``mip``      — Tool 8: install a MicroPython package via mip.
-* ``lint``     — Tool 9: static analysis for chip-pin hazards.
+Subcommands:
+
+* ``discover`` — enumerate ESP32-family USB devices.
+* ``flash``    — write MicroPython firmware (esptool / dfu-util).
+* ``push``     — upload code to the device via mpremote.
+* ``pull``     — download code from the device via mpremote.
+* ``ls``       — list files on the device.
+* ``wifi``     — configure Wi-Fi (DHCP or static IP).
+* ``repl``     — drop into the device's MicroPython REPL.
+* ``info``     — one-shot summary of a connected device's state.
+* ``reset``    — hard- or soft-reset the device.
+* ``mip``      — install a MicroPython package via mip.
+* ``lint``     — static analysis for chip-pin hazards.
 """
 
 from __future__ import annotations
@@ -22,18 +27,20 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
+from common import code, mip, repl, reset, wifi
+from common.family import FamilyContext
 from esp32 import (
     __version__,
-    code,
     discover,
     flash,
     info,
     lint,
-    mip,
-    repl,
-    reset,
-    wifi,
 )
+from esp32._mpy import resolve_port
+
+# One FamilyContext for every subcommand dispatch. Built once at import
+# time so it's cheap to pass into the shared runners.
+ESP32_FAMILY = FamilyContext(name="esp32", resolve_port=resolve_port)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -260,7 +267,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "wifi",
         help="Connect to a Wi-Fi network and optionally set a static IP.",
         description=(
-            "Drive the ESP32's Wi-Fi STA interface via mpremote exec: "
+            "Drive the ESP32's Wi-Fi STA interface via mpremote: "
             "connect to an SSID, optionally pin a static IP, optionally "
             "persist the config on the device."
         ),
@@ -375,8 +382,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "Install a MicroPython package via mip (MicroPython's "
             "official package manager). Requires the device to have "
             "internet access — typically Wi-Fi established at boot via "
-            "`_wifi_cfg.py`. Uses the `resume` mpremote keyword so the "
-            "wlan stack isn't soft-reset out from under the network fetch."
+            "`_wifi_cfg.py`. Chains `exec \"import _wifi_cfg\"` before "
+            "mip so the wlan stack isn't soft-reset out from under the "
+            "network fetch."
         ),
     )
     p_mip.add_argument(
@@ -474,21 +482,21 @@ def main(argv: list[str] | None = None) -> int:
         case "flash":
             return flash.run(args)
         case "push":
-            return code.run_push(args)
+            return code.run_push(args, family=ESP32_FAMILY)
         case "pull":
-            return code.run_pull(args)
+            return code.run_pull(args, family=ESP32_FAMILY)
         case "ls":
-            return code.run_ls(args)
+            return code.run_ls(args, family=ESP32_FAMILY)
         case "wifi":
-            return wifi.run(args)
+            return wifi.run(args, family=ESP32_FAMILY)
         case "repl":
-            return repl.run(args)
+            return repl.run(args, family=ESP32_FAMILY)
         case "info":
             return info.run(args)
         case "reset":
-            return reset.run(args)
+            return reset.run(args, family=ESP32_FAMILY)
         case "mip":
-            return mip.run(args)
+            return mip.run(args, family=ESP32_FAMILY)
         case "lint":
             return lint.run(args)
         case _:  # pragma: no cover - argparse required=True prevents this

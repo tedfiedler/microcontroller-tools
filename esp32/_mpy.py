@@ -1,24 +1,24 @@
-"""Small helpers shared by tools that talk to an ESP32 over USB.
+"""Port resolution for ESP32-family devices.
 
-Keeping this module private (leading underscore) because it's internal wiring,
-not part of the CLI surface.
+This module is intentionally thin: the mpremote primitives
+(``MpyError``, ``mpremote_binary``, ``run_mpremote``,
+``run_mpremote_capture``) all live in :mod:`common._mpy`. The only
+piece that's family-specific is :func:`resolve_port`, which knows that
+"a device of our family" means "a port whose USB fingerprint matches
+:data:`esp32.usb_ids.ESP32_SIGNATURES`".
+
+The ``common._mpy.MpyError`` class is re-exported here for callers that
+still use the historical ``from esp32._mpy import MpyError`` form.
 """
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from typing import Literal, overload
 
+from common._mpy import MpyError
 from esp32 import discover
 
-
-class MpyError(RuntimeError):
-    """Raised for recoverable errors when driving a device via mpremote.
-
-    Also raised by :func:`resolve_port` for the broader "find an ESP32 on USB"
-    cases used by pre-flash flows that don't yet involve MicroPython.
-    """
+__all__ = ["MpyError", "resolve_port"]
 
 
 @overload
@@ -92,86 +92,3 @@ def resolve_port(
             "Disambiguate with --port <path>."
         )
     return candidates[0].port
-
-
-def mpremote_binary() -> str:
-    """Locate the ``mpremote`` binary or raise :class:`MpyError`."""
-    binary = shutil.which("mpremote")
-    if binary is None:
-        raise MpyError(
-            "mpremote not found on PATH. Re-run `uv sync` to install the dep."
-        )
-    return binary
-
-
-def run_mpremote(
-    port: str,
-    argv: list[str],
-    *,
-    echo: bool = True,
-    check: bool = True,
-) -> int:
-    """Invoke mpremote with ``connect <port>`` prefixed.
-
-    Args:
-        port: Serial port passed to ``mpremote connect``.
-        argv: The mpremote subcommand args (e.g. ``["fs", "ls", ":"]``).
-        echo: If True, print the command line and stream the child's
-            stdout/stderr to the terminal. If False, suppress the echo and
-            capture (and discard, on success) the child's output — used by
-            ``--quiet`` flows that want clean output but still loud errors.
-        check: If True, raise :class:`MpyError` when mpremote exits non-zero.
-            Set False for best-effort calls like speculative ``fs mkdir``.
-
-    Returns:
-        mpremote's exit code.
-
-    Raises:
-        MpyError: If ``check`` is True and mpremote exits non-zero. When
-            ``echo=False`` the captured stderr is folded into the error
-            message so failures stay actionable under ``--quiet``.
-    """
-    binary = mpremote_binary()
-    cmd = [binary, "connect", port, *argv]
-    if echo:
-        print(f"$ {' '.join(cmd)}", flush=True)
-    result = subprocess.run(
-        cmd,
-        check=False,
-        capture_output=not echo,
-        text=not echo,
-    )
-    if check and result.returncode != 0:
-        msg = f"mpremote exited with status {result.returncode}"
-        if not echo and result.stderr:
-            msg += f": {result.stderr.strip()}"
-        raise MpyError(msg)
-    return result.returncode
-
-
-def run_mpremote_capture(
-    port: str, argv: list[str], *, echo: bool = True
-) -> str:
-    """Invoke mpremote and return captured stdout as text.
-
-    Use this when the caller needs to parse mpremote/device output (e.g.
-    enumerating files via a walk script). The child's stdout is captured
-    rather than streamed; ``echo`` controls only whether we print the
-    invoked command line for transparency.
-
-    Raises:
-        MpyError: If mpremote exits non-zero. Stderr is included in the
-            error message to make remote-side failures actionable.
-    """
-    binary = mpremote_binary()
-    cmd = [binary, "connect", port, *argv]
-    if echo:
-        print(f"$ {' '.join(cmd)}", flush=True)
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
-        raise MpyError(
-            f"mpremote exited with status {result.returncode}"
-            + (f": {stderr}" if stderr else "")
-        )
-    return result.stdout
