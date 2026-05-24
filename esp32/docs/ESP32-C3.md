@@ -133,3 +133,66 @@ spi = machine.SPI(2, baudrate=8_000_000,
 UART(0) at 115200 baud prints a bootloader log every reset. Useful for
 diagnosing "won't start" problems — visible via `mpremote repl` over
 the bridge serial port, or over USB-CDC on native-USB boards.
+
+## ESP32-C3-DevKitM-1 — board specifics
+
+Espressif's official reference dev board (ESP32-C3-MINI-1 module on a
+breakout with two USB connectors and a 2 × 15-pin header). What follows
+is in addition to the chip-level info above — anything not called out
+here behaves as the chip-level sections describe.
+
+### Onboard hardware
+
+| Pin / part         | Role                                                                                 |
+|--------------------|--------------------------------------------------------------------------------------|
+| GP8                | Onboard addressable RGB LED (WS2812-style). Series resistor sized so the LED doesn't pull the strapping level wrong at boot. |
+| GP9                | BOOT button (active LOW). Also the strapping pin for download mode — see [Strapping pins](#strapping-pins). |
+| RST                | Hardware reset button. Not on a GPIO.                                                |
+| GP20 / GP21        | UART(0) RX / TX, wired through the onboard CP2102N USB-UART bridge to the **UART** USB connector. This is where the boot log and the MicroPython REPL appear over the bridge path. |
+| GP18 / GP19        | Native USB D- / D+, wired to the **USB** USB connector (the C-DevKitM-1 has both connectors; some board revisions label them differently). |
+
+### Driving a single LED — board-specific picks
+
+Onboard RGB LED on GP8 is the easiest path if one LED is enough:
+
+```python
+import neopixel, machine
+np = neopixel.NeoPixel(machine.Pin(8), 1)
+np[0] = (255, 0, 0); np.write()    # red
+```
+
+For external LEDs through the header, the safe picks are
+**GP0, GP1, GP3, GP4, GP5, GP6, GP7, GP10**. Caveats per pin:
+
+| Pin       | OK for LED? | Notes                                                                                                                       |
+|-----------|-------------|-----------------------------------------------------------------------------------------------------------------------------|
+| GP0–GP4   | ✅          | ADC1 channels but plain GPIO output is fine. GP4 / GP5 are common UART(1) fallback pins — pick others if you'll add a UART. |
+| GP5       | ✅          | ADC2 — ADC *reads* conflict with Wi-Fi, but you're outputting.                                                              |
+| GP6, GP7  | ✅          | Common SPI(2) SCK / MOSI defaults — pick others if you'll add SPI peripherals.                                              |
+| GP10      | ✅          | General-purpose, no conflicts.                                                                                              |
+| GP2       | ⚠️           | Strapping. An LED + 220 Ω–1 kΩ resistor pulls weakly enough that boot usually still works, but it's not guaranteed.         |
+| GP8       | ⚠️           | Onboard RGB LED — use that instead of adding a parallel external LED here.                                                  |
+| GP9       | ❌          | BOOT button. An LED here can hold boot mode LOW at power-up and the chip won't start.                                       |
+| GP18, GP19| ⚠️           | Wired to the native-USB connector. Safe as GPIO only if you exclusively plug into the UART connector. Plugging into the USB connector while these are driven fights the host. |
+| GP20, GP21| ⚠️           | UART(0) RX / TX to the CP2102. LEDs would flicker on every console byte and you'd lose the REPL.                             |
+
+Driver sizing: 220 Ω for typical red / yellow at ~10 mA, 330 Ω for
+green / blue, 1 kΩ for a dim indicator. Stay under ~12 mA continuous
+per GPIO; use a small NPN / N-channel MOSFET for anything brighter or
+for LED strips.
+
+For PWM dimming, the LEDC peripheral works on any of these pins:
+
+```python
+from machine import Pin, PWM
+pwm = PWM(Pin(4), freq=1000)
+pwm.duty_u16(32768)               # 50% brightness
+```
+
+### What's on the headers
+
+The DevKitM-1 breaks out GP0–GP10 and GP18–GP21 (15 GPIOs in total),
+plus 3.3 V, 5 V, GND, and EN. The remaining GPIO numbers (GP11–GP17)
+aren't exposed — they're either bonded to the internal QSPI flash on
+the MINI-1 module or simply not pulled out. If a code example mentions
+GP11 / GP12 / etc. it's targeting a different dev board.
