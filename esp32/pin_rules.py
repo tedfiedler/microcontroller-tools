@@ -16,7 +16,14 @@ from common.lint import PinRule
 
 # Re-exported here so callers who care about ESP32 rules don't need to
 # reach into common/ just to spell the type.
-__all__ = ["ESP32_RULES", "RULES_BY_CHIP", "PinRule", "chips_with_rules", "rules_for_chip"]
+__all__ = [
+    "ESP32_C3_RULES",
+    "ESP32_RULES",
+    "RULES_BY_CHIP",
+    "PinRule",
+    "chips_with_rules",
+    "rules_for_chip",
+]
 
 
 ESP32_RULES: tuple[PinRule, ...] = (
@@ -48,9 +55,36 @@ ESP32_RULES: tuple[PinRule, ...] = (
 )
 
 
+# ESP32-C3 (RISC-V single-core). Different rule shape from the classic
+# ESP32: no flash-pin error class (QSPI flash is on dedicated chip pins
+# outside the GPIO numbering), no input-only-pin note class (all 22
+# GPIOs are bidirectional). Just two warning classes.
+ESP32_C3_RULES: tuple[PinRule, ...] = (
+    PinRule(
+        pins=(2, 8, 9),
+        severity="warning",
+        reason=(
+            "a strapping pin on ESP32-C3 — sampled at reset; wrong level "
+            "at boot prevents the chip from starting (GP9 is the BOOT "
+            "button on every dev board)"
+        ),
+    ),
+    PinRule(
+        pins=(18, 19),
+        severity="warning",
+        reason=(
+            "wired to the native USB-Serial-JTAG on ESP32-C3 (GP18 = "
+            "USB D-, GP19 = USB D+) — driving from user code breaks the "
+            "USB CDC console and the MicroPython REPL on native-USB boards"
+        ),
+    ),
+)
+
+
 RULES_BY_CHIP: dict[str, tuple[PinRule, ...]] = {
     "ESP32": ESP32_RULES,
-    # ESP32-S2, S3, C3 added once verified against hardware.
+    "ESP32-C3": ESP32_C3_RULES,
+    # ESP32-S2 / S3 added once verified against hardware.
 }
 
 

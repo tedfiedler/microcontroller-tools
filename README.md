@@ -82,12 +82,12 @@ into the current directory for each detected chip family — a short
 header notes the detected port and PROFILE, followed by chip-family
 info that's uniform across boards using that silicon (GPIO map,
 strapping pins, ADC/DAC/touch channels, UART/I²C/SPI conventions).
-Available on both CLIs: `esp32 discover --doc` ships `ESP32.md` today
-(S2/S3/C3 templates added as boards are verified against hardware);
-`pico discover --doc` ships `RP2040.md` and `RP2350.md`. For Pico
-devices in BOOTSEL mode the chip family comes from `INFO_UF2.TXT` on
-the mounted volume, so `--doc` works without `--probe` connecting to
-a serial REPL.
+Available on both CLIs: `esp32 discover --doc` ships `ESP32.md` and
+`ESP32-C3.md` today (S2 / S3 templates added as boards are verified
+against hardware); `pico discover --doc` ships `RP2040.md` and
+`RP2350.md`. For Pico devices in BOOTSEL mode the chip family comes
+from `INFO_UF2.TXT` on the mounted volume, so `--doc` works without
+`--probe` connecting to a serial REPL.
 
 **Pico-specific:** `pico discover` recognizes two modes a Pico can
 show up in. **Serial mode** — board is running firmware, enumerates
@@ -340,13 +340,22 @@ input-only, or otherwise wired to onboard hardware on the configured
 chip family. Three severities, each cross-referenced against the
 family's rule table:
 
-**ESP32:**
+**ESP32 (classic):**
 
 | Severity | Pins | Why |
 |---|---|---|
 | **error**   | 6, 7, 8, 9, 10, 11 | Reserved for internal SPI flash — toggling crashes the chip. |
 | **warning** | 0, 2, 5, 12, 15    | Strapping pins — wrong level at boot prevents startup. |
 | **note**    | 34, 35, 36, 39 (only when `Pin.OUT`) | Input-only — no output drive, no internal pulls. |
+
+**ESP32-C3:**
+
+| Severity | Pins | Why |
+|---|---|---|
+| **warning** | 2, 8, 9   | Strapping pins — sampled at reset; GP9 is the BOOT button on every dev board. |
+| **warning** | 18, 19    | Native USB-Serial-JTAG (GP18 = D-, GP19 = D+) — using as plain GPIO breaks the USB CDC console. |
+
+No flash-pin `error` class on the C3 — its QSPI flash is wired to dedicated chip pins outside the GPIO numbering.
 
 **Pico (RP2040 / RP2350):**
 
@@ -369,8 +378,8 @@ main.py:7:18   note     Pin(34) is input-only on ESP32 — no output drive, no i
 
 Exit code = number of errors, so the command slots into pre-commit
 hooks. v1 limitations: only literal int args fire (no flow analysis
-yet, so `n = 7; Pin(n)` is invisible), and only ESP32 + RP2040 +
-RP2350 rules ship today — ESP32-S2/S3/C3 rules will land as boards
+yet, so `n = 7; Pin(n)` is invisible), and ESP32 + ESP32-C3 + RP2040
++ RP2350 rules ship today — ESP32-S2 / S3 rules will land as boards
 are verified against hardware.
 
 ## Supported devices
