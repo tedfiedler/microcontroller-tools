@@ -96,7 +96,11 @@ ESP32_GENERIC = BoardProfile(
     flash_offset=0x1000,
     dfu_vid_pid=None,
     dfu_alt=0,
-    machine_name="Generic ESP32 module",
+    # Newer micropython.org builds dropped the "Generic " prefix from
+    # MICROPY_HW_BOARD_NAME. We store the suffix form here and let
+    # infer_from_machine() also accept "Generic <suffix>" so older
+    # firmware still resolves to the same profile.
+    machine_name="ESP32 module",
 )
 
 ESP32_GENERIC_S2 = BoardProfile(
@@ -109,7 +113,7 @@ ESP32_GENERIC_S2 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
-    machine_name="Generic ESP32S2 module",
+    machine_name="ESP32S2 module",
 )
 
 ESP32_GENERIC_S3 = BoardProfile(
@@ -122,7 +126,7 @@ ESP32_GENERIC_S3 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
-    machine_name="Generic ESP32S3 module",
+    machine_name="ESP32S3 module",
 )
 
 ESP32_GENERIC_C3 = BoardProfile(
@@ -135,7 +139,9 @@ ESP32_GENERIC_C3 = BoardProfile(
     flash_offset=0x0,
     dfu_vid_pid=None,
     dfu_alt=0,
-    machine_name="Generic ESP32C3 module",
+    # Verified live against a flashed C3 running v1.28.0:
+    # os.uname().machine = 'ESP32C3 module with ESP32C3'.
+    machine_name="ESP32C3 module",
 )
 
 
@@ -184,13 +190,22 @@ def infer_from_machine(machine: str) -> BoardProfile | None:
     ``os.uname().machine`` string, or ``None`` if no profile matches.
 
     ``os.uname().machine`` is formatted as
-    ``"<MICROPY_HW_BOARD_NAME> with <chip_family>"``; we match against the
-    ``machine_name`` prefix on each profile. The chip-family tail is
+    ``"<MICROPY_HW_BOARD_NAME> with <chip_family>"``; we match against
+    each profile's ``machine_name`` prefix. The chip-family tail is
     deliberately ignored — same firmware build always carries the same
     board-name prefix, but the suffix has varied across MicroPython
     releases (``ESP32S3`` vs ``ESP32-S3`` etc.).
+
+    Two prefix forms are accepted per profile: the canonical
+    ``machine_name`` itself (newer micropython.org builds — verified
+    on C3 v1.28.0), and ``"Generic <machine_name>"`` (older builds
+    that prefixed the name). Candidates are tried longest-first so
+    ``"ESP32C3 module"`` wins over ``"ESP32 module"`` on a C3.
     """
-    for profile in BOARD_PROFILES:
+    candidates = sorted(BOARD_PROFILES, key=lambda p: len(p.machine_name), reverse=True)
+    for profile in candidates:
         if machine.startswith(profile.machine_name):
+            return profile
+        if machine.startswith(f"Generic {profile.machine_name}"):
             return profile
     return None
