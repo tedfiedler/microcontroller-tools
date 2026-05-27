@@ -1,8 +1,12 @@
 # microcontroller-tools
 
-CLI tools for working with MicroPython-capable microcontrollers over USB.
-Two device families today: **ESP32** (classic ESP32 + S2 / S3 / C3 + Arduino
-Nano ESP32) and **Raspberry Pi Pico** (RP2040 + RP2350).
+CLI tools for working with microcontrollers over USB. Three device
+families today: **ESP32** (classic ESP32 + S2 / S3 / C3 + Arduino Nano
+ESP32), **Raspberry Pi Pico** (RP2040 + RP2350), and **AVR** (stock
+ATmega328P with the Arduino bootloader, programmed over an FTDI /
+CH340 / CP2102 USB-UART bridge). The first two run MicroPython; the
+AVR CLI is intentionally narrower because the chip runs compiled C, not
+Python.
 
 ## Install
 
@@ -18,19 +22,27 @@ Or with pip (inside a venv):
 pip install -e .
 ```
 
-This registers two console scripts:
+This registers three console scripts:
 
 - **`esp32`** — driver for ESP32-family boards.
 - **`pico`** — driver for Raspberry Pi Pico-family boards.
+- **`avr`** — driver for AVR-family boards (ATmega328P + Arduino bootloader by default).
 
-Both share the same subcommand structure (`discover`, `flash`, `push`,
-`pull`, `ls`, `wifi`, `repl`, `info`, `reset`, `mip`, `lint`). The
-mpremote-driven half of each command (`push` / `pull` / `ls`, `repl`,
-`reset`, `wifi`, `mip`, plus the `info` probe and `lint` AST walker)
-lives in a shared `common/` package — chip-agnostic and identical
-between the two CLIs. Family-specific bits — USB fingerprints, flash
-backend (esptool / dfu-util / UF2-MSC / picotool), board profiles, and
-chip-pin rule data — live under `esp32/` and `pico/` respectively.
+`esp32` and `pico` share the same MicroPython-centric subcommand
+structure (`discover`, `flash`, `push`, `pull`, `ls`, `wifi`, `repl`,
+`info`, `reset`, `mip`, `lint`). The mpremote-driven half of each
+command (`push` / `pull` / `ls`, `repl`, `reset`, `wifi`, `mip`, plus
+the `info` probe and `lint` AST walker) lives in a shared `common/`
+package — chip-agnostic and identical between the two CLIs.
+Family-specific bits — USB fingerprints, flash backend (esptool /
+dfu-util / UF2-MSC / picotool), board profiles, and chip-pin rule data
+— live under `esp32/` and `pico/` respectively.
+
+`avr` has a deliberately narrower surface (`discover`, `flash`,
+`reset`, `monitor` only) because there's no MicroPython on AVRs —
+nothing to `push` / `pull` / `repl` against, no `mip`, no Wi-Fi, and
+`lint`'s Python-AST walker doesn't apply to `.ino` / `.cpp` sources.
+See [AVR usage](#avr-usage) below for the AVR-specific commands.
 
 ## Usage
 
@@ -382,6 +394,95 @@ yet, so `n = 7; Pin(n)` is invisible), and ESP32 + ESP32-C3 + RP2040
 + RP2350 rules ship today — ESP32-S2 / S3 rules will land as boards
 are verified against hardware.
 
+## AVR usage
+
+The `avr` CLI is intentionally narrower than `esp32` / `pico`. There's
+no MicroPython on AVRs — the chip runs compiled C from an Intel-HEX
+file you build separately (`arduino-cli compile`, `platformio run`,
+plain `avr-gcc`), and `avr flash` is the bootloader-driven upload step.
+
+Subcommands: `discover`, `flash`, `reset`, `monitor`. Nothing else
+shares with the MicroPython CLIs.
+
+**Prereq:** `avrdude` on PATH.
+
+```sh
+sudo apt install avrdude     # Debian/Ubuntu/Raspberry Pi OS
+brew install avrdude         # macOS
+sudo pacman -S avrdude       # Arch
+```
+
+### Discover bridges
+
+```sh
+avr discover                 # list known USB-UART bridge chips
+avr discover --all           # include unrecognized serial ports
+avr discover --json
+```
+
+A matched row proves a USB-UART bridge is plugged in (FT232, CH340,
+CP2102, or an Arduino board's onboard ATmega16U2 USB-serial stack) —
+**not** that an AVR is on the other side. Disambiguation happens at
+`avr flash` time when avrdude actually talks the bootloader.
+
+### Flash a .hex
+
+```sh
+avr flash sketch.hex                              # default: ATmega328P + optiboot (115200)
+avr flash sketch.hex --port /dev/ttyUSB0          # explicit port
+avr flash sketch.hex --board atmega328p-duemilanove   # older 57600-baud bootloader
+avr flash sketch.hex --mcu atmega168              # different AVR
+avr flash sketch.hex --baud 19200                 # LilyPad / Pro 3.3 V
+avr flash sketch.hex -v --yes                     # verbose, non-interactive
+```
+
+Internally runs:
+
+```
+avrdude -c arduino -p atmega328p -P <port> -b 115200 -D \
+        -U flash:w:sketch.hex:i
+```
+
+`-D` is mandatory — Arduino bootloaders (STK500v1) don't expose a
+chip-erase command, and without `-D` avrdude tries to erase up front
+and bails with a `stk500_recv()` error. Optiboot erases per-page
+during the write itself, so `-D` is correct (not a workaround).
+
+This tool **does not compile** the sketch — bring your own `.hex`. To
+build one from an `.ino`:
+
+```sh
+arduino-cli compile --fqbn arduino:avr:uno --output-dir build sketch.ino
+avr flash build/sketch.ino.hex
+```
+
+### Reset
+
+```sh
+avr reset                    # pulse DTR (~= press the reset button)
+avr reset --port /dev/ttyUSB0
+```
+
+Briefly drops DTR on the USB-UART bridge. On a standard Arduino reset
+circuit (DTR → 100 nF cap → AVR RESET), that produces a brief LOW
+pulse on RESET — same effect as pressing the button. The bootloader
+then runs for ~1 s waiting for an upload before falling through to the
+sketch. Breadboarded ATmega328 setups without the DTR-coupling cap
+won't respond; ground RESET manually in that case.
+
+### Monitor (serial console)
+
+```sh
+avr monitor                  # opens at 9600 baud (Arduino default)
+avr monitor --baud 115200    # match Serial.begin(115200) in the sketch
+avr monitor --port /dev/ttyUSB0
+```
+
+Delegates to `python -m serial.tools.miniterm` — the mini-terminal
+that ships with pyserial. Replaces the process via `execvp` so signals
+and TTY state pass through cleanly; exit with `Ctrl-]`. No extra
+system dep (no picocom / tio / screen required).
+
 ## Supported devices
 
 ### ESP32 family
@@ -409,3 +510,24 @@ Third-party RP2040 / RP2350 modules that re-use Raspberry Pi's VID
 should work as far as USB-level discovery is concerned; the
 onboard-hardware warnings from `pico lint` may not apply since those
 boards typically free up GP23 / GP24 / GP25 / GP29.
+
+### AVR family
+
+Any AVR `avrdude` can talk to. The default profile targets a stock
+**ATmega328P** with the Arduino bootloader (optiboot, 115200 baud), but
+`--mcu` / `--programmer` / `--baud` overrides cover the rest of the
+AVR catalogue. Common known-good combinations:
+
+- **ATmega328P + optiboot** (Arduino Uno R3, modern Nano, most
+  "Arduino-compatible" ATmega328 breakouts shipped after ~2011) —
+  default; nothing to override.
+- **ATmega328P + Duemilanove bootloader** (older Arduino Duemilanove,
+  LilyPad variants with STK500v1 at 57600) — `--board atmega328p-duemilanove`.
+- **ATmega168 / ATmega32U4 / ATtiny85** — `--mcu` override; the
+  Arduino bootloader speaks the same protocol on each.
+
+USB-side detection covers the four common USB-UART bridges (FTDI
+FT232 family, QinHeng CH340/CH341, Silicon Labs CP210x, Arduino-branded
+ATmega16U2-as-USB-serial on Uno R3 / Mega2560). A matched bridge does
+**not** prove an AVR is on the other side — that's confirmed at
+`avr flash` time when avrdude actually negotiates with the bootloader.
